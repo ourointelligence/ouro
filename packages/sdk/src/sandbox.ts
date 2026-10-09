@@ -160,7 +160,12 @@ function wrapModule(js: string): string {
   var m = module.exports;
   var decide = m.decide;
   __ouro = {
-    run: function(xs, ps) { var d = decide(JSON.parse(xs), JSON.parse(ps)); return JSON.stringify(d === undefined ? null : d); }
+    run: function(xs, ps) { var d = decide(JSON.parse(xs), JSON.parse(ps)); return JSON.stringify(d === undefined ? null : d); },
+    runMany: function(xss, ps) {
+      var inputs = JSON.parse(xss); var p = JSON.parse(ps); var out = new Array(inputs.length);
+      for (var i = 0; i < inputs.length; i++) { var d = decide(inputs[i], p); out[i] = d === undefined ? null : d; }
+      return JSON.stringify(out);
+    }
   };
   return JSON.stringify({ params: m.params, bounds: m.bounds, describe: m.describe, hasDecide: typeof decide === 'function' });
 })()`;
@@ -170,11 +175,18 @@ interface Backend {
   readonly name: 'isolated-vm' | 'worker';
   load(id: string, js: string): Promise<string>;
   run(id: string, xs: string, ps: string): Promise<string>;
+  /** Run decide over a JSON array of inputs in one call; the timeout scales with the batch size. */
+  runMany(id: string, xss: string, ps: string, n: number): Promise<string>;
   dispose(id: string): void;
   disposeAll(): void;
 }
 
 type Limits = { memoryMb: number; decideTimeoutMs: number; loadTimeoutMs: number };
+
+/** A batch may take the per-decision budget times its size, capped at one minute. */
+function batchTimeout(limits: Limits, n: number): number {
+  return Math.min(60_000, Math.max(limits.decideTimeoutMs, limits.decideTimeoutMs * Math.max(1, n)));
+}
 
 function classify(err: unknown): SandboxError {
   const msg = err instanceof Error ? err.message : String(err);
@@ -220,6 +232,17 @@ class IsolatedVmBackend implements Backend {
       throw e;
     }
   }
+  async runMany(id: string, xss: string, ps: string, n: number): Promise<string> {
+    const h = this.isolates.get(id);
+    if (!h) throw new SandboxError(`runtime: strategy ${id} is not compiled`, 'runtime');
+    try {
+      return await h.context.eval(`__ouro.runMany(${JSON.stringify(xss)}, ${JSON.stringify(ps)})`, { timeout: batchTimeout(this.limits, n) });
+    } catch (err) {
+      const e = classify(err);
+      if (e.kind === 'memory' || h.isolate.isDisposed) this.dispose(id);
+      throw e;
+    }
+  }
   dispose(id: string): void {
     const h = this.isolates.get(id);
     if (!h) return;
@@ -252,6 +275,11 @@ parentPort.on('message', (msg) => {
       if (!context) throw new Error('not loaded');
       context.__xs = msg.xs; context.__ps = msg.ps;
       const out = vm.runInContext('__ouro.run(__xs, __ps)', context, { timeout: limits.decideTimeoutMs });
+      parentPort.postMessage({ seq: msg.seq, ok: true, value: out });
+    } else if (msg.type === 'runMany') {
+      if (!context) throw new Error('not loaded');
+      context.__xs = msg.xs; context.__ps = msg.ps;
+      const out = vm.runInContext('__ouro.runMany(__xs, __ps)', context, { timeout: msg.timeoutMs });
       parentPort.postMessage({ seq: msg.seq, ok: true, value: out });
     }
   } catch (err) {
@@ -341,6 +369,18 @@ class WorkerBackend implements Backend {
     if (!w) throw new SandboxError(`runtime: strategy ${id} is not compiled`, 'runtime');
     try {
       return await w.call({ type: 'run', xs, ps }, this.limits.decideTimeoutMs + 100);
+    } catch (err) {
+      const e = classify(err);
+      if (w.dead) this.dispose(id);
+      throw e;
+    }
+  }
+  async runMany(id: string, xss: string, ps: string, n: number): Promise<string> {
+    const w = this.workers.get(id);
+    if (!w) throw new SandboxError(`runtime: strategy ${id} is not compiled`, 'runtime');
+    const timeoutMs = batchTimeout(this.limits, n);
+    try {
+      return await w.call({ type: 'runMany', xs: xss, ps, timeoutMs }, timeoutMs + 100);
     } catch (err) {
       const e = classify(err);
       if (w.dead) this.dispose(id);
@@ -466,6 +506,26 @@ export class Sandbox {
     const parsed = DecisionSchema.safeParse(raw);
     if (!parsed.success) throw new SandboxError(`runtime: decide returned an invalid decision: ${JSON.stringify(raw)}`, 'runtime');
     return parsed.data;
+  }
+
+  /** Run decide over many inputs in one sandbox call (replay). Each decision is validated like run(). */
+  async runMany(strategyId: string, xs: Input[], p: Record<string, number>): Promise<Decision[]> {
+    const backend = await this.getBackend();
+    if (!this.compiled.has(strategyId)) throw new SandboxError(`runtime: strategy ${strategyId} is not compiled`, 'runtime');
+    if (xs.length === 0) return [];
+    const out = await backend.runMany(strategyId, JSON.stringify(xs), JSON.stringify(p), xs.length);
+    let raw: unknown;
+    try {
+      raw = JSON.parse(out);
+    } catch {
+      throw new SandboxError('runtime: decide returned a non-serialisable value', 'runtime');
+    }
+    if (!Array.isArray(raw) || raw.length !== xs.length) throw new SandboxError('runtime: batch decide returned the wrong shape', 'runtime');
+    return raw.map((r) => {
+      const parsed = DecisionSchema.safeParse(r);
+      if (!parsed.success) throw new SandboxError(`runtime: decide returned an invalid decision: ${JSON.stringify(r)}`, 'runtime');
+      return parsed.data;
+    });
   }
 
   has(strategyId: string): boolean {

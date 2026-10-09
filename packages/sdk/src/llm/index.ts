@@ -6,7 +6,10 @@ import { gemini } from './gemini.js';
 import { ollama } from './ollama.js';
 
 export { anthropic, openai, gemini, ollama };
-export { completeJson, extractJson, LLMOutputError } from './json.js';
+export { completeJson, completeText, extractJson, normaliseResponse, LLMOutputError } from './json.js';
+export type { LLMCallInfo, JsonRequest } from './json.js';
+export { wrapLLM, withRetry } from './wrap.js';
+export type { WrapLLMHooks } from './wrap.js';
 
 export type LLMName = 'anthropic' | 'openai' | 'gemini' | 'ollama';
 

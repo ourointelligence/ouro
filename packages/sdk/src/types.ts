@@ -2,7 +2,20 @@
  * Core data model. Every record the SDK stores or exchanges with plugins is one of these.
  */
 
-export type Bar = { ts: number; asset: string; tf: string; o: number; h: number; l: number; c: number; v: number };
+export type Bar = {
+  ts: number;
+  asset: string;
+  tf: string;
+  o: number;
+  h: number;
+  l: number;
+  c: number;
+  v: number;
+  /** Extra numeric fields a Source may attach (funding rate, open interest, premium...). Stored with the bar and visible to primitive packs. */
+  ext?: Record<string, number>;
+  /** Set by a Source when the bar arrived more than two intervals late; the loop records it but does not trade on it. */
+  stale?: boolean;
+};
 
 export type FeatureValue = number | boolean | null;
 
@@ -18,7 +31,16 @@ export type Side = 'long' | 'short' | 'flat';
 
 export type Decision = { side: Side; size: number; stop?: number; tp?: number; tag?: string } | null;
 
-export type Outcome = { pnl: number; fees: number; drawdown: number; holdBars: number; closedTs: number; raw?: unknown };
+export type Outcome = {
+  pnl: number;
+  fees: number;
+  drawdown: number;
+  holdBars: number;
+  closedTs: number;
+  /** Funding paid (negative) or received (positive) while the position was open, in percent of equity. Already included in pnl. */
+  funding?: number;
+  raw?: unknown;
+};
 
 export type Episode = {
   id: string;
@@ -67,13 +89,15 @@ export type Strategy = {
   describe?: string;
   /** Cycle in which the strategy left the live set, if it did. */
   cycleRetired?: number;
+  /** Why it left the live set: 'replaced' by a better candidate, 'inactive' (too few trades), 'rolled_back', 'compile'. */
+  retireReason?: string;
 };
 
 export type Diagnosis = { patterns: string[]; summary: string; weakIds: string[]; strongIds: string[] };
 
 export type CycleResult = {
   cycle: number;
-  status: 'promoted' | 'no_change' | 'pending';
+  status: 'promoted' | 'no_change' | 'pending' | 'error';
   promoted: Strategy[];
   retired: Strategy[];
   rejected: Array<{ strategy: Strategy; reason: string }>;
@@ -87,7 +111,20 @@ export type CycleResult = {
   note?: string;
   /** Wall-clock time the cycle finished. */
   ts?: number;
+  /** Wall-clock time the cycle started. */
+  startedAt?: number;
+  /** LLM usage summed over the cycle. */
+  usage?: LLMUsageTotal;
 };
+
+/** Token usage reported by one LLM call. */
+export type LLMUsage = { inputTokens: number; outputTokens: number };
+
+/** Usage summed over several calls, with a cost when pricing is configured. */
+export type LLMUsageTotal = LLMUsage & { calls: number; usd?: number };
+
+/** Price per million tokens, used to turn usage into dollars. */
+export type LLMPricing = { inputPerMTok: number; outputPerMTok: number };
 
 export type Proposal = {
   origin: 'mutate' | 'crossbreed' | 'fresh';
@@ -105,6 +142,8 @@ export type AnyProposal = Proposal | SeedProposal;
 export type Scorer = (ep: Episode) => number;
 
 export type ReplayResult = { score: number; maxDrawdown: number; n: number; maxSize: number; matched: number };
+
+export type ReplayMode = 'bars' | 'outcome';
 
 export type TakeoffRow = { cycle: number; populationCI: number; bestCI: number; velocity: number };
 

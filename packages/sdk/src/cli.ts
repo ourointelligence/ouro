@@ -110,7 +110,7 @@ export function buildProgram(): Command {
   program
     .name('ouro')
     .description(`${OURO_NAME}: recursive self-improvement for any goal. ${OURO_TAGLINE}`)
-    .version('0.1.0')
+    .version('0.2.0')
     .option('-c, --config <file>', 'config file (default: ouro.config.ts in cwd)');
 
   program
@@ -270,17 +270,13 @@ export function buildProgram(): Command {
 
   program
     .command('export')
-    .description('write ouro.json = { population, history, takeoff, goal, createdAt }')
+    .description('write ouro.json (schemaVersion 1, see docs/export-schema.md)')
     .option('-o, --out <file>', 'output file', 'ouro.json')
     .action(async (o: { out: string }) => {
-      await withLoop(program.opts(), async (loop, cfg) => {
-        const population = await loop.population();
-        const history = await loop.history();
-        const takeoff = await loop.takeoff();
-        const createdAt = history.cycles[0]?.ts ?? Date.now();
-        const out = { name: OURO_NAME, goal: cfg.goal, createdAt, population, history, takeoff };
+      await withLoop(program.opts(), async (loop) => {
+        const out = await loop.export();
         fs.writeFileSync(o.out, JSON.stringify(out, null, 2));
-        console.log(`wrote ${o.out}: ${population.length} live, ${history.strategies.length} total strategies, ${takeoff.length} cycles`);
+        console.log(`wrote ${o.out} (schemaVersion ${out.schemaVersion}): ${out.population.length} live, ${out.history.strategies.length} total strategies, ${out.takeoff.length} cycles`);
       });
     });
 

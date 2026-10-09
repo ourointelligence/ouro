@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import type { LLM } from '../plugins.js';
+import type { LLM, LLMResponse } from '../plugins.js';
 
 export type GeminiOptions = { apiKey?: string; model?: string; baseUrl?: string; fetch?: typeof globalThis.fetch };
 
@@ -26,7 +26,13 @@ export function gemini(opts: GeminiOptions = {}): LLM {
       if (opts.fetch) globalThis.fetch = opts.fetch;
       try {
         const res = await m.generateContent(req.user);
-        return res.response.text();
+        const meta = res.response.usageMetadata;
+        const out: LLMResponse = {
+          text: res.response.text(),
+          usage: { inputTokens: meta?.promptTokenCount ?? 0, outputTokens: meta?.candidatesTokenCount ?? 0 },
+          model,
+        };
+        return out;
       } finally {
         if (opts.fetch) globalThis.fetch = original;
       }

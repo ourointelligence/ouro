@@ -47,7 +47,8 @@ describe('anthropic adapter', () => {
     });
     const llm = anthropic({ apiKey: 'k', fetch: m.fetch });
     expect(llm.name).toBe('anthropic:claude-sonnet-5-5');
-    expect(await llm.complete(req)).toBe('{"ok":true}');
+    const reply = await llm.complete(req);
+    expect(reply).toMatchObject({ text: '{"ok":true}', usage: { inputTokens: 1, outputTokens: 1 } });
     expect(m.calls).toHaveLength(1);
     expect(m.calls[0]!.url).toMatch(/\/v1\/messages$/);
     expect(m.calls[0]!.body.temperature).toBeUndefined();
@@ -83,7 +84,7 @@ describe('openai adapter', () => {
     const m = mockFetch({ id: 'c', object: 'chat.completion', created: 1, model: 'gpt-4o', choices: [{ index: 0, message: { role: 'assistant', content: '{"a":1}' }, finish_reason: 'stop' }] });
     const llm = openai({ apiKey: 'k', fetch: m.fetch });
     expect(llm.name).toBe('openai:gpt-4o');
-    expect(await llm.complete(req)).toBe('{"a":1}');
+    expect(await llm.complete(req)).toMatchObject({ text: '{"a":1}' });
     expect(m.calls[0]!.url).toMatch(/\/chat\/completions$/);
     expect(m.calls[0]!.body.temperature).toBe(0);
     expect(m.calls[0]!.body.response_format).toEqual({ type: 'json_object' });
@@ -104,7 +105,7 @@ describe('gemini adapter', () => {
     vi.stubGlobal('fetch', m.fetch);
     const llm = gemini({ apiKey: 'k' });
     expect(llm.name).toBe('gemini:gemini-2.0-flash');
-    expect(await llm.complete(req)).toBe('{"g":1}');
+    expect(await llm.complete(req)).toMatchObject({ text: '{"g":1}' });
     expect(m.calls[0]!.url).toMatch(/models\/gemini-2.0-flash:generateContent/);
     expect(m.calls[0]!.body.generationConfig.temperature).toBe(0);
     expect(m.calls[0]!.body.generationConfig.responseMimeType).toBe('application/json');
@@ -117,7 +118,7 @@ describe('ollama adapter', () => {
     const m = mockFetch({ message: { role: 'assistant', content: '{"o":1}' }, done: true });
     const llm = ollama({ url: 'http://localhost:11434/', fetch: m.fetch });
     expect(llm.name).toBe('ollama:llama3.1');
-    expect(await llm.complete(req)).toBe('{"o":1}');
+    expect(await llm.complete(req)).toMatchObject({ text: '{"o":1}' });
     expect(m.calls[0]!.url).toBe('http://localhost:11434/api/chat');
     expect(m.calls[0]!.body.format).toBe('json');
     expect(m.calls[0]!.body.stream).toBe(false);

@@ -8,6 +8,12 @@ export type PaperConfig = {
   slippageBps?: number;
   /** Optional hard cap on bars a position may stay open. Off by default. */
   maxHoldBars?: number;
+  /**
+   * Accrue funding from bar.ext['funding.rate'] (the hourly rate, Hyperliquid convention) once per hour while a
+   * position is open: longs pay a positive rate, shorts receive it. Reported in outcome.funding and included in pnl.
+   * Off by default so 0.1.0 results do not change.
+   */
+  funding?: boolean;
 };
 
 export type PaperPosition = {
@@ -23,6 +29,10 @@ export type PaperPosition = {
   /** Worst adverse excursion as a fraction of entry price. */
   maxAdverse: number;
   lastPrice: number;
+  /** Funding accrued so far in percent of equity (negative = paid). */
+  funding: number;
+  /** Timestamp funding was last settled up to. */
+  fundingTs: number;
 };
 
 type PendingOrder = { strategyId: string; decision: NonNullable<Decision>; ts: number };
@@ -41,8 +51,12 @@ export type PaperOutcomeRaw = {
 
 export interface PaperExecutor extends Executor {
   readonly name: 'paper';
+  /** The fill-model settings this executor runs with (used by the loop's bar replay). */
+  readonly config: Required<Pick<PaperConfig, 'feeBps' | 'slippageBps' | 'funding'>> & Pick<PaperConfig, 'maxHoldBars'>;
+  onOpen(cb: (strategyId: string, info: { asset: string; side: 'long' | 'short'; size: number; price: number; ts: number }) => void): void;
   onBar(bar: Bar): void;
-  stop(): void;
+  /** Close every open position at its last price. `ts` stamps the outcomes (default: now). */
+  stop(ts?: number): void;
   positions(): PaperPosition[];
   /** Realised pnl after fees, in percent of equity, summed over every closed trade. */
   realised(): number;
@@ -63,9 +77,11 @@ export function paperExecutor(cfg: PaperConfig = {}): PaperExecutor {
   const feeBps = cfg.feeBps ?? 3.5;
   const slippageBps = cfg.slippageBps ?? 2;
   const maxHoldBars = cfg.maxHoldBars;
+  const fundingOn = cfg.funding ?? false;
   const open = new Map<string, PaperPosition>();
   const pending = new Map<string, PendingOrder>();
   const listeners: Array<(strategyId: string, outcome: Outcome) => void> = [];
+  const openListeners: Array<(strategyId: string, info: { asset: string; side: 'long' | 'short'; size: number; price: number; ts: number }) => void> = [];
   let realisedTotal = 0;
   let closedCount = 0;
 
@@ -74,11 +90,12 @@ export function paperExecutor(cfg: PaperConfig = {}): PaperExecutor {
   function emitClose(pos: PaperPosition, exit: number, ts: number, reason: PaperCloseReason) {
     const dir = pos.side === 'long' ? 1 : -1;
     const move = (exit / pos.entry - 1) * dir;
-    const pnl = pos.size * move * 100;
+    const pnl = pos.size * move * 100 + pos.funding;
     const fees = pos.size * (feeBps / 10_000) * 2 * 100;
     const drawdown = pos.size * pos.maxAdverse * 100;
     const raw: PaperOutcomeRaw = { asset: pos.asset, side: pos.side, entry: pos.entry, exit, size: pos.size, reason, openedTs: pos.openedTs };
     const outcome: Outcome = { pnl, fees, drawdown, holdBars: pos.bars, closedTs: ts, raw };
+    if (fundingOn) outcome.funding = pos.funding;
     realisedTotal += pnl - fees;
     closedCount++;
     open.delete(key(pos.strategyId, pos.asset));
@@ -98,15 +115,31 @@ export function paperExecutor(cfg: PaperConfig = {}): PaperExecutor {
       bars: 0,
       maxAdverse: 0,
       lastPrice: entry,
+      funding: 0,
+      fundingTs: bar.ts,
     };
     if (d.stop && d.stop > 0) pos.stop = d.side === 'long' ? entry - d.stop : entry + d.stop;
     if (d.tp && d.tp > 0) pos.tp = d.side === 'long' ? entry + d.tp : entry - d.tp;
     open.set(key(strategyId, asset), pos);
+    for (const l of openListeners) l(strategyId, { asset, side: d.side, size: d.size, price: entry, ts: bar.ts });
+  }
+
+  function accrueFunding(pos: PaperPosition, bar: Bar): void {
+    const rate = bar.ext?.['funding.rate'];
+    if (typeof rate !== 'number' || !Number.isFinite(rate)) return;
+    const HOUR = 3_600_000;
+    const hours = Math.floor(bar.ts / HOUR) - Math.floor(pos.fundingTs / HOUR);
+    if (hours <= 0) return;
+    // longs pay a positive hourly rate on their notional (size is a fraction of equity, so this is percent of equity)
+    const payment = rate * hours * pos.size * 100;
+    pos.funding += pos.side === 'long' ? -payment : payment;
+    pos.fundingTs = bar.ts;
   }
 
   function markAndCheck(pos: PaperPosition, bar: Bar): void {
     pos.bars++;
     pos.lastPrice = bar.c;
+    if (fundingOn) accrueFunding(pos, bar);
     const adverse = pos.side === 'long' ? (pos.entry - bar.l) / pos.entry : (bar.h - pos.entry) / pos.entry;
     if (adverse > pos.maxAdverse) pos.maxAdverse = adverse;
     // stop first: a bar that touches both stop and target is resolved conservatively
@@ -133,6 +166,7 @@ export function paperExecutor(cfg: PaperConfig = {}): PaperExecutor {
 
   return {
     name: 'paper',
+    config: { feeBps, slippageBps, funding: fundingOn, maxHoldBars },
     async place(d, x) {
       const strategyId = String(x.meta?.['strategyId'] ?? d.tag ?? 'unknown');
       pending.set(key(strategyId, x.asset), { strategyId, decision: d, ts: x.ts });
@@ -140,6 +174,9 @@ export function paperExecutor(cfg: PaperConfig = {}): PaperExecutor {
     },
     onClose(cb) {
       listeners.push(cb);
+    },
+    onOpen(cb) {
+      openListeners.push(cb);
     },
     onBar(bar) {
       // 1. fill orders placed on the previous bar at this bar's open
@@ -165,9 +202,9 @@ export function paperExecutor(cfg: PaperConfig = {}): PaperExecutor {
       // 2. mark open positions on this asset and resolve stops and targets
       for (const pos of [...open.values()]) if (pos.asset === bar.asset) markAndCheck(pos, bar);
     },
-    stop() {
+    stop(ts = Date.now()) {
       pending.clear();
-      for (const pos of [...open.values()]) emitClose(pos, slip(pos.lastPrice, pos.side === 'long' ? 'sell' : 'buy'), Date.now(), 'shutdown');
+      for (const pos of [...open.values()]) emitClose(pos, slip(pos.lastPrice, pos.side === 'long' ? 'sell' : 'buy'), ts, 'shutdown');
     },
     positions() {
       return [...open.values()].map((p) => ({ ...p }));

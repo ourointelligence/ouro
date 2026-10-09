@@ -4,7 +4,7 @@ Everything below describes the code in `packages/sdk/src` as built. File names i
 
 ## 1. Repository
 
-pnpm monorepo, TypeScript 5 strict, ESM, tsup build, vitest, changesets, eslint, MIT, Node >= 20.
+pnpm monorepo, TypeScript 5 strict, ESM, tsup build, vitest, changesets, eslint, MIT, Node >= 20. All three packages share one version (0.2.0); the plugin packages depend on `@ourointelligence/sdk` with the range `^0.2.0`, which `link-workspace-packages=true` in `.npmrc` resolves to the workspace copy during development and which stays valid in the packed files.
 
 ```
 packages/sdk                  @ourointelligence/sdk
@@ -20,12 +20,16 @@ Runtime dependencies of `@ourointelligence/sdk`: `better-sqlite3`, `zod`, `comma
 ## 2. Core types (`types.ts`)
 
 ```ts
-type Bar = { ts: number; asset: string; tf: string; o: number; h: number; l: number; c: number; v: number };
+type Bar = {
+  ts: number; asset: string; tf: string; o: number; h: number; l: number; c: number; v: number;
+  ext?: Record<string, number>;   // extra numbers a Source attaches (funding rate, open interest ...), stored and replayed
+  stale?: boolean;                // set by a Source on a bar more than two intervals late; recorded, never traded on
+};
 type FeatureValue = number | boolean | null;
 type Input = { ts: number; asset: string; bar: Bar; features: Record<string, FeatureValue>; meta?: Record<string, unknown> };
 type Side = 'long' | 'short' | 'flat';
 type Decision = { side: Side; size: number; stop?: number; tp?: number; tag?: string } | null;
-type Outcome = { pnl: number; fees: number; drawdown: number; holdBars: number; closedTs: number; raw?: unknown };
+type Outcome = { pnl: number; fees: number; drawdown: number; holdBars: number; closedTs: number; funding?: number; raw?: unknown };  // funding is already inside pnl
 type Episode = { id: string; ts: number; strategyId: string; input: Input; decision: Decision; outcome: Outcome; score?: number; tags?: string[] };
 type StrategyStatus = 'live' | 'retired' | 'rejected' | 'rolled_back' | 'pending';
 type Trial = {
@@ -43,13 +47,18 @@ type Strategy = {
   id: string; parentIds: string[]; origin: Origin; cycleBorn: number; code: string;
   params: Record<string, number>; rationale: string; status: StrategyStatus; trial?: Trial; ci?: number;
   bounds?: Bounds; describe?: string; cycleRetired?: number;
+  retireReason?: string;          // 'replaced' | 'inactive' | 'rolled_back' | 'compile'
 };
 type Diagnosis = { patterns: string[]; summary: string; weakIds: string[]; strongIds: string[] };
 type CycleResult = {
-  cycle: number; status: 'promoted' | 'no_change' | 'pending'; promoted: Strategy[]; retired: Strategy[];
+  cycle: number; status: 'promoted' | 'no_change' | 'pending' | 'error'; promoted: Strategy[]; retired: Strategy[];
   rejected: Array<{ strategy: Strategy; reason: string }>; diagnosis: Diagnosis; populationCI: number;
-  bestCI?: number; baselineHoldout?: number; note?: string; ts?: number;
+  bestCI?: number; baselineHoldout?: number; note?: string; ts?: number; startedAt?: number; usage?: LLMUsageTotal;
 };
+type LLMUsage = { inputTokens: number; outputTokens: number };
+type LLMUsageTotal = LLMUsage & { calls: number; usd?: number };
+type LLMPricing = { inputPerMTok: number; outputPerMTok: number };
+type ReplayMode = 'bars' | 'outcome';
 type Proposal = { origin: 'mutate' | 'crossbreed' | 'fresh'; parentIds: string[]; code: string; params: Record<string, number>; rationale: string };
 type SeedProposal = Omit<Proposal, 'origin'> & { origin: 'seed' };
 type Scorer = (ep: Episode) => number;
@@ -76,6 +85,7 @@ interface Executor {
   name: string;
   place(d: NonNullable<Decision>, x: Input): Promise<{ orderId: string }>;
   onClose(cb: (strategyId: string, outcome: Outcome) => void): void;
+  onOpen?(cb: (strategyId: string, info: { asset: string; side: 'long' | 'short'; size: number; price: number; ts: number }) => void): void;  // optional: report fills
   onBar?(bar: Bar): void;            // optional: called with every new bar before any decision on it
   stop?(): Promise<void> | void;     // optional: close everything and release resources
 }
@@ -84,11 +94,14 @@ interface PrimitivePack {
   compute(bars: Bar[], i: number): Record<string, FeatureValue>;
   describe(): Array<{ key: string; doc: string }>;
 }
+type LLMResponse = { text: string; usage?: LLMUsage; model?: string };
 interface LLM {
   name: string;
-  complete(req: { system: string; user: string; json: true; maxTokens?: number }): Promise<string>;
+  complete(req: { system: string; user: string; json: true; maxTokens?: number }): Promise<string | LLMResponse>;
 }
 ```
+
+A plain string reply (0.1.0 adapters) is normalised to `{ text, usage: { 0, 0 }, model: <adapter name> }` by `normaliseResponse`; every model call goes through `completeText`, which reports `{ model, usage, ms, attempt }` to the loop.
 
 Feature keys: a pack returns unprefixed keys (`hull21.crossUp`); `computeFeatures` and `primitiveDocs` prefix them as `${pack.name}.${key}` (`ta.hull21.crossUp`). The prefixed docs are what the Generator is shown and the only keys a strategy may read.
 
@@ -114,32 +127,33 @@ No imports. Only `x.features['<prefixed key>']` plus `Math`, `Number` and `JSON`
 3. The JS is wrapped so it evaluates to a JSON string describing the exports and installs `__ouro.run(xs, ps)`; loaded under the load timeout.
 4. The exports are validated with zod: params are finite numbers, bounds have finite `min`/`max` and a positive `step`, `describe` is 1..400 characters, `decide` is a function, every param has bounds.
 
-`Sandbox.run(id, x, p)` calls `__ouro.run(JSON.stringify(x), JSON.stringify(p))` under the decide timeout and validates the result (`side` in long/short/flat, finite non-negative `size`, finite optional `stop`/`tp`, `tag` up to 64 chars, or `null`); anything else throws `SandboxError('runtime: ...')`.
+`Sandbox.run(id, x, p)` calls `__ouro.run(JSON.stringify(x), JSON.stringify(p))` under the decide timeout and validates the result (`side` in long/short/flat, finite non-negative `size`, finite optional `stop`/`tp`, `tag` up to 64 chars, or `null`); anything else throws `SandboxError('runtime: ...')`. `Sandbox.runMany(id, xs, p)` runs `decide` over an array of inputs in one call through `__ouro.runMany`, under a timeout of the per-decision budget times the batch size (capped at one minute), and validates every decision the same way; bar replay uses it so one window costs one isolate call per asset.
 
 Backends: `isolated-vm` when it loads (one `Isolate` per strategy id, `memoryLimit` 64 MB, `eval` with `timeout` 50 ms per decide and 2000 ms for load; a memory kill disposes the isolate), otherwise a worker thread per strategy running `node:vm` with a context of `{ Math, Number, JSON }` plus the SDK's own `__ouro` slot, `codeGeneration: { strings: false, wasm: false }`, `vm.runInContext` timeouts, and `resourceLimits.maxOldGenerationSizeMb` 64 (an out-of-memory worker exits and the call rejects). Error kinds: `forbidden`, `syntax`, `contract`, `timeout`, `memory`, `runtime`. Compiled isolates are cached per id and keyed by a hash of the code; `backend: 'auto' | 'isolated-vm' | 'worker'` forces one.
 
-## 6. Log (`log.ts`)
+## 6. Store (`log.ts`)
 
 SQLite at `.ouro/episodes.db`:
 
 ```sql
 CREATE TABLE IF NOT EXISTS episodes (id TEXT PRIMARY KEY, ts INTEGER NOT NULL, strategyId TEXT NOT NULL, score REAL, json TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS episodes_strategy_ts ON episodes (strategyId, ts);
+CREATE TABLE IF NOT EXISTS bars (asset TEXT NOT NULL, tf TEXT NOT NULL, ts INTEGER NOT NULL, json TEXT NOT NULL, PRIMARY KEY (asset, tf, ts));
 ```
 
-WAL journal mode, `INSERT OR REPLACE` on id. Methods: `append`, `recent(strategyId, n)` (newest n, returned oldest-first), `recentSince`, `all`, `count`, `countSince(strategyId, ts)`, `strategyIds`, `total`, `close`. If `better-sqlite3` fails to load, `openLog` falls back to `.ouro/episodes.jsonl` (one JSON episode per line, fully loaded into memory on open) and reports the reason through `onFallback`; `backend: 'sqlite' | 'jsonl'` forces one.
+WAL journal mode, `busy_timeout` 5000, `INSERT OR REPLACE` on id and on `(asset, tf, ts)`. Episode methods: `append`, `recent(strategyId, n)` (newest n, returned oldest-first), `recentSince`, `all`, `count`, `countSince(strategyId, ts)`, `strategyIds`, `total`, `firstTs`. Bar methods: `appendBar(bar)` (the loop stores every warm-up, backfill and live bar, with `ext` and `stale`), `bars(asset, tf, { from?, to?, limit? })` (oldest-first; `limit` keeps the newest), `barCount`. `flush()` and `close()`. If `better-sqlite3` fails to load, `openLog` falls back to `.ouro/episodes.jsonl` plus `.ouro/bars.jsonl` (one JSON record per line, fully loaded into memory on open) and reports the reason through `onFallback`; `backend: 'sqlite' | 'jsonl'` forces one.
 
-## 7. Trial harness (`trial.ts`)
+## 7. Trial harness (`trial.ts`, `replay.ts`)
 
 `split(episodes, holdoutRatio)` sorts by `ts` and takes the newest `round(n * ratio)` as holdout (at least one when the ratio is above zero and there are at least two episodes; never everything). Never random.
 
-`replay(episodes, { id, code, params }, scorer, sandbox)` compiles (cached) and, in chronological order, re-runs `decide` on each episode's stored input with the given params. When the decision side matches the stored decision's side (and is not `flat`) the stored outcome is credited and the scorer is applied to the episode; otherwise the scorer is applied to a zero outcome (`pnl 0, fees 0, drawdown 0, holdBars 0`). Returns the mean score, the max peak-to-trough drawdown of the cumulative score curve, `n`, the largest `size` requested and the number of matched episodes.
+**Bar-level replay** (`replayBars`, the default since 0.2.0 through `replay: 'bars'`). The loop turns a slice of episodes into a window: `from` is the earliest decision time (`input.ts`) in the slice, `to` is the time just before the next slice starts (train) or the newest bar seen (holdout). For every asset it loads the stored bars inside the window plus `INDICATOR_LOOKBACK` bars before it, computes features for each window bar with the registered packs from the series up to that bar, runs `decide` over all of them in one `runMany` call, then pushes the decisions through a fresh paper executor bar by bar: decide on the closed bar, fill at the next bar's open with fee and slippage, stop and take profit checked against each later bar's high and low, stop first when both are hit, open positions closed at the last window bar's price. Stale bars are skipped. Each close becomes an episode scored with the scorer; the result is the mean score, the max drawdown of the cumulative score curve, `n` closed trades, the largest `size` requested and `matched = n`. Fee, slippage and funding settings come from the paper executor in use, or from `replayPaper`. The same bars and params always give the same result; a look-ahead test (`test/unit/replay.test.ts`) changes every bar after the window and asserts that no feature or decision inside it moved, and that a pack or strategy that peeks at the next bar is caught.
 
-**Documented simplification.** A candidate is only ever credited with trades that some live strategy actually took, with their real outcomes; a trade nobody took scores zero, not a counterfactual. Full re-simulation against stored bars is a later upgrade. Because of this, `decide` must be a pure function of `(input, params)`.
+**Outcome replay** (`replay`, `replay: 'outcome'`, the 0.1.0 behaviour, also the fallback when a window has no stored bars). Compiles (cached) and, in chronological order, re-runs `decide` on each episode's stored input with the given params. When the decision side matches the stored decision's side (and is not `flat`) the stored outcome is credited and the scorer is applied to the episode; otherwise the scorer is applied to a zero outcome (`pnl 0, fees 0, drawdown 0, holdBars 0`). A candidate is only ever credited with trades that some live strategy actually took. In both modes `decide` must be a pure function of `(input, params)`.
 
 ## 8. Guards (`guards.ts`)
 
-`check(proposal, config, { sandbox, scorer, episodes, featureKeys?, parents?, id? })` rejects with a reason string, in this order:
+`check(proposal, config, { sandbox, scorer, episodes, featureKeys?, parents?, id?, replayFn? })` rejects with a reason string, in this order. When `replayFn` is given (the loop passes its bar replay over the train window) it replaces the episode replay for the risk checks.
 
 | Reason prefix | Condition |
 | --- | --- |
@@ -177,44 +191,57 @@ The Critic summarises episodes before the prompt: per weak strategy the 10 worst
 
 Adapters: `anthropic` (Messages API, default `claude-sonnet-5-5`, temperature 0 only on models that accept it), `openai` (Chat Completions, `gpt-4o`, `response_format: json_object`, temperature 0, honours `OPENAI_BASE_URL`), `gemini` (`gemini-2.0-flash`, `responseMimeType: application/json`, temperature 0), `ollama` (`llama3.1`, `format: 'json'`, temperature 0, `OLLAMA_URL`). Every adapter appends a one line "reply with a single JSON document (object, for openai) and nothing else" instruction to the system prompt, accepts an injected `fetch` for tests, and reads `OURO_MODEL`. `resolveLLM(choice)` takes an LLM object, an adapter name, or `OURO_LLM` (default `anthropic`).
 
-`completeJson(llm, { system, user, schema })` calls the model, extracts the first JSON object or array (code fences and prose tolerated), validates with zod, retries once with the error appended to the prompt, and throws `LLMOutputError` on the second failure. The loop catches `LLMOutputError` from the generator (that proposal is skipped) and from the critic (an empty diagnosis is used); invalid output therefore never reaches trial. Seeding retries up to four times before failing.
+`completeJson(llm, { system, user, schema, onCall? })` calls the model through `completeText`, extracts the first JSON object or array (code fences and prose tolerated), validates with zod, retries once with the error appended to the prompt, and throws `LLMOutputError` on the second failure. `onCall` receives `{ model, usage, ms, attempt }` after every call; the loop uses it to emit `llm` events and sum the cycle's usage. The loop catches `LLMOutputError` from the generator (that proposal is skipped) and from the critic (an empty diagnosis is used); invalid output therefore never reaches trial. Seeding retries up to four times on invalid output before failing.
+
+Adapter failures are different from invalid output. Every model-backed step runs under `withRetry` (`llmRetry`, default 2 retries with 1 s, 2 s backoff; errors named `LLMOutputError` or `BudgetExceeded` are not retried). When the retries are exhausted inside a cycle, the cycle is recorded with status `error`, note `llm_error`, the usage so far, and the population unchanged; `cycle:end` carries `outcome: 'error', reason: 'llm_error'` and an `error` event with scope `llm` fires. When it happens during seeding, `start()` reports the error and tries again after `seedRetryMs` for as long as the loop is running.
+
+`wrapLLM(inner, { before, after, onError, name })` wraps any adapter: `before` may replace the request or throw, `after` sees the normalised reply and the elapsed time and may replace it, `onError` may recover. Usage reported by the wrapper is what the loop counts, so an app can cap a daily budget by throwing an error named `BudgetExceeded` from `before`.
 
 ## 12. The cycle (`loop.ts`, `runCycle`)
 
 ```
-cycleNo = pop.cycle + 1
+cycleNo = pop.cycle + 1; forced = cycleMaxWait elapsed since the last cycle (bar time) and some strategy has a new episode
+emit cycle:start
 for s in live: perStrategy[s] = log.recent(s.id, cycleEvery)
-episodes = dedupe(union(perStrategy)) sorted by ts
-if episodes.length < cycleEvery or none newer than lastCycleTs:
-  return no_change('not enough data')                       // not recorded, no cycle number consumed
+episodes = dedupe(union(perStrategy)) sorted by ts; emit cycle:step collect
+if (episodes.length < cycleEvery and not forced) or none newer than lastCycleTs:
+  return no_change('not enough data')                       // not recorded, no cycle number consumed; cycle:end still fires
 { train, holdout } = split(episodes, holdoutRatio)           // holdout = newest slice
+trainWindow = [earliest input.ts of train, first holdout input.ts); holdoutWindow = [earliest input.ts of holdout, newest bar]
 for s in live:
-  s.trial = { trainScore: replay(train, s), holdoutScore: replay(holdout, s), ... }
+  s.trial = { trainScore: score(s, train, trainWindow), holdoutScore: score(s, holdout, holdoutWindow), ... }   // bar replay, or outcome replay
   own = split(perStrategy[s], holdoutRatio).holdout
   if own.length >= 3: s.trial.ownHoldoutScore = mean(score(own))
+  if log.countSince(s.id, lastCycleTs) < minTradesPerWindow: inactive.add(s); holdoutScore[s] = -Infinity
 if baselineHoldout is null and some seed has ownHoldoutScore:
   baselineHoldout = mean(ownHoldoutScore of seedIds); baselineScale = mean(|ownHoldoutScore| of seedIds)   // stored once
-ranked = rank by pooled holdoutScore desc; weak = bottom retireShare; strong = top 2
+ranked = rank by holdoutScore desc (inactive last); weak = bottom retireShare; strong = top 2 active; emit cycle:step rank
 medianTrain = median(train scores of live); threshold = medianTrain + margin * |medianTrain|
-diagnosis = critic.diagnose(worst of weak, best of strong, live)      // LLMOutputError -> empty diagnosis
-proposals = [mutate(w) for w in weak] + [crossbreed(strong[0], strong[1])] + [fresh()]  capped at maxProposalsPerCycle
+diagnosis = critic.diagnose(worst of weak, best of strong, live)      // LLMOutputError -> empty diagnosis; emit cycle:step diagnose, critique
+proposals = [mutate(w) for w in weak] + [crossbreed(strong[0], strong[1])] + [fresh()]  capped at maxProposalsPerCycle; emit cycle:step generate
 replaceable = ranked reversed (weakest first)
 for p in proposals:
-  id = pop.nextId(); verdict = guards.check(p, { episodes: train, parents, featureKeys, id })
-  if not ok: reject(reason); continue
-  if train score <= threshold: reject('train margin'); continue
-  target = replaceable[0]; if none: reject('no slot'); continue
-  holdout score = replay(holdout, candidate)
-  if holdout score <= target.trial.holdoutScore: reject('holdout'); continue
+  id = pop.nextId(); verdict = guards.check(p, { episodes: train, replayFn: score over trainWindow, parents, featureKeys, id })
+  if not ok: reject(reason); emit candidate(stage sandbox | guards); continue
+  if train score <= threshold: reject('train margin'); emit candidate(stage trial); continue
+  target = replaceable[0]; if none: reject('no slot'); emit candidate(stage slot); continue
+  holdout score = score(candidate, holdout, holdoutWindow)
+  targetScore = -Infinity if target is inactive else target.trial.holdoutScore
+  if holdout score <= targetScore: reject('holdout'); emit candidate(stage holdout); continue
   replaceable.shift(); promotions.push({ candidate, retireId: target.id })
-if no promotions: record no_change (with diagnosis and rejected list); return
-if requireApproval: candidates stored as 'pending', pending = { result, promotions }, lastCycleTs = newest; return status 'pending'
-apply: for each promotion pop.promote(candidate, retireId, cycleNo)
+emit cycle:step trial, validate
+if no promotions: record no_change (with diagnosis and rejected list); emit cycle:step promote, cycle, cycle:end; return
+if requireApproval: candidates stored as 'pending', pending = { result, promotions }, lastCycleTs = newest;
+                    emit candidate(stage pending), pending, cycle:end; return status 'pending'
+apply: for each promotion pop.promote(candidate, retireId, cycleNo); target.retireReason = 'inactive' | 'replaced';
+       emit candidate(stage promoted), promote, retire
 finish: for s in live: s.ci = capabilityIndex(s, baselineHoldout, baselineScale) if it has ownHoldoutScore else undefined
-        result.populationCI = mean(defined ci); result.bestCI = max; lastCycleTs = newest; recordCycle; write takeoff.json
+        result.populationCI = mean(defined ci); result.bestCI = max; result.usage = sum of this cycle's model calls (+ usd with llmPricing)
+        lastCycleTs = newest; recordCycle; write takeoff.json; emit cycle, cycle:end
+on an adapter failure that survived the retries anywhere above: record status 'error', note 'llm_error', population unchanged; emit error(scope llm), cycle:end(outcome error)
 ```
 
-Rejected candidates are stored in history with status `rejected` and the reason is kept on the cycle record. `approve(cycle)` recompiles the pending candidates and applies them; `reject(cycle)` marks them `rejected` with reason `rejected by user` and records a `no_change` cycle. `cycle()` is re-entrancy safe (a running cycle is returned to concurrent callers) and throws while a cycle is pending.
+Every model call inside the cycle emits `llm { cycle, purpose: 'critic' | 'generator', model, inputTokens, outputTokens, ms }` (`purpose: 'seed'` with cycle 0 during seeding). Rejected candidates are stored in history with status `rejected` and the reason is kept on the cycle record. `approve(cycle)` recompiles the pending candidates, emits `approved` and applies them; `reject(cycle)` marks them `rejected` with reason `rejected by user`, emits `rejected` and records a `no_change` cycle. `setApproval(on)` flips `guards.requireApproval` at runtime. `cycle()` is re-entrancy safe (a running cycle is returned to concurrent callers) and throws while a cycle is pending. `ready()` is true when every live strategy has `cycleEvery` episodes since the last cycle, or when `cycleMaxWait` of bar time has passed since the last cycle (or since the first episode, before any cycle) and at least one new episode exists.
 
 ## 13. SI metrics (`si.ts`)
 
@@ -230,21 +257,23 @@ Each non-null decision votes for its side with weight `max(0.05, ci + 1)` in `we
 
 ## 15. Run flow (`start`)
 
-1. `init()`; seed K if there is no live population; compile every live module (a module that no longer compiles is retired).
-2. `source.history({ assets, tf, bars: warmupBars + backfill })`, grouped per asset and sorted. The oldest `warmupBars` of each asset become the warm window.
+1. `init()`; seed K if there is no live population, retrying after `seedRetryMs` while the model is down; compile every live module (a module that no longer compiles is retired with reason `compile`).
+2. `source.history({ assets, tf, bars: warmupBars + backfill })`, grouped per asset and sorted. The oldest `warmupBars` of each asset become the warm window and are stored in the bars table.
 3. The newest `backfill` bars of every asset are merged by time and fed through `processBar` one by one.
 4. `source.subscribe({ assets, tf })` is iterated until `stop()`.
-5. `processBar(bar)`: append to the asset's window (replace on equal `ts`, ignore older), trim the window, emit `bar`, call `executor.onBar?.(bar)`, skip decisions until the window reaches `min(INDICATOR_LOOKBACK, warmupBars)` bars, compute features, `decide(x)`, then dispatch: per strategy, `executor.place(d, { ...x, meta: { strategyId } })` for every non-null decision, remembering the input that opened the position; or with `dispatch: 'ensemble'`, one `place` tagged `ensemble` with the voters remembered. Afterwards, if `autoCycle` and every live strategy has `cycleEvery` episodes since the last cycle, `cycle()` runs.
-6. `executor.onClose((strategyId, outcome))` builds an Episode: the asset comes from `outcome.raw.asset` when present (else the most recent entry), the input and decision are the ones that opened the position, `ts = outcome.closedTs`, `tags = [side, 'win' | 'loss']`; it is scored and appended. An `ensemble` close is credited to every strategy that voted with the ensemble side.
-7. A timer from `start({ every })` also calls `cycle()`; `stop()` clears it, ends the subscription and calls `executor.stop?.()`.
+5. `processBar(bar)`: append to the asset's window (replace on equal `ts`, ignore older), trim the window, store the bar, emit `bar`, call `executor.onBar?.(bar)`. A bar with `stale` set, or any bar while the loop is paused, stops here. Otherwise skip decisions until the window reaches `min(INDICATOR_LOOKBACK, warmupBars)` bars, compute features, `decide(x)` (which emits `decision` per non-null result), then dispatch: per strategy, `executor.place(d, { ...x, meta: { strategyId } })` for every non-null decision, remembering the input that opened the position; or with `dispatch: 'ensemble'`, one `place` tagged `ensemble` with the voters remembered. `trade:open` fires from the executor's `onOpen` hook with the fill price, or at placement with the decision price for executors without one. Afterwards, if `autoCycle`, the loop is not paused and `ready()` is true, `cycle()` runs.
+6. `executor.onClose((strategyId, outcome))` builds an Episode: the asset comes from `outcome.raw.asset` when present (else the most recent entry), the input and decision are the ones that opened the position, `ts = outcome.closedTs`, `tags = [side, 'win' | 'loss']`; it is scored, appended, and `episode` then `trade:close` fire. An `ensemble` close is credited to every strategy that voted with the ensemble side.
+7. A timer from `start({ every })` also calls `cycle()` (not while paused). `pause(reason)` and `resume()` toggle decisions and automatic cycles without touching the subscription. `stop()` clears the timer, waits for a running cycle to finish, ends the subscription, calls `executor.stop?.()`, waits for the data loop to return, flushes the store and saves `history.json`, then emits `stop`; `close()` also releases the sandbox and the store. `status()` reports the flags, counts and timestamps.
+
+**Crash safety.** A cycle writes `history.json` only when it finishes (`recordCycle`, atomic rename), so a process killed at any step restarts with the previous cycle intact; the next run re-reads the same episodes and runs the cycle once. Strategy files written for rejected candidates before the kill are overwritten when their ids are reused. `test/integration/crash.test.ts` kills a child process with SIGKILL at each of the seven steps and checks that the resumed run records exactly one cycle with no duplicate ids. Two loops with different `dir` values in one process keep separate stores, sandboxes, id counters and files (`test/integration/v020.test.ts`).
 
 ## 16. Paper executor units (`executors/paper.ts`)
 
-Orders placed on bar N fill at bar N+1's open with `slippageBps` against the trader. `pnl = size * (exit / entry - 1) * direction * 100`, `fees = size * feeBps / 10000 * 2 * 100`, `drawdown = size * maxAdverseExcursion * 100`, all in percent of equity. `size` is the fraction of equity, `stop` and `tp` are price distances turned into levels at fill time; a bar touching both resolves as a stop. Closes happen on stop, tp, a `flat` decision, an opposite-side decision (flip), optional `maxHoldBars`, or shutdown; `outcome.raw = { asset, side, entry, exit, size, reason, openedTs }`. One position per strategy per asset; a same-side decision while open is a hold that refreshes stop and tp.
+Orders placed on bar N fill at bar N+1's open with `slippageBps` against the trader. `pnl = size * (exit / entry - 1) * direction * 100 + funding`, `fees = size * feeBps / 10000 * 2 * 100`, `drawdown = size * maxAdverseExcursion * 100`, all in percent of equity. With `funding: true` (default false), each bar whose timestamp crosses one or more hour boundaries since the last settlement accrues `rate * hours * size * 100` from `bar.ext['funding.rate']` (the hourly rate): longs pay a positive rate, shorts receive it; the total is `outcome.funding`. `stop(ts?)` closes everything at the last price and stamps the outcomes with `ts` (replay passes the last window bar). The executor exposes `config` (`feeBps`, `slippageBps`, `funding`, `maxHoldBars`) and `onOpen(cb)`, called with `{ asset, side, size, price, ts }` at every fill. `size` is the fraction of equity, `stop` and `tp` are price distances turned into levels at fill time; a bar touching both resolves as a stop. Closes happen on stop, tp, a `flat` decision, an opposite-side decision (flip), optional `maxHoldBars`, or shutdown; `outcome.raw = { asset, side, entry, exit, size, reason, openedTs }`. One position per strategy per asset; a same-side decision while open is a hold that refreshes stop and tp.
 
 ## 17. CLI (`cli.ts`)
 
-`ouro.config.ts` is transpiled next to itself (so relative imports resolve) into a temporary `.mjs`, imported, and deleted. Commands: `run`, `start`, `cycle`, `population`, `history`, `explain`, `rollback`, `approve`, `reject`, `takeoff`, `export`. `run --live` throws unless the config's executor is a plugin and `guards.requireApproval` is true; `--paper` forces `executor: 'paper'`.
+`ouro.config.ts` is transpiled next to itself (so relative imports resolve) into a temporary `.mjs`, imported, and deleted. Commands: `run`, `start`, `cycle`, `population`, `history`, `explain`, `rollback`, `approve`, `reject`, `takeoff`, `export`. `run --live` throws unless the config's executor is a plugin and `guards.requireApproval` is true; `--paper` forces `executor: 'paper'`. `export` writes `loop.export()`: `{ schemaVersion: 1, name, goal, createdAt, cycle, population, history, takeoff }` in canonical key order (`canonical()` sorts keys at every level and drops `undefined`; `canonicalJson()` is the whitespace-free text a hash chain should sign). The shape is documented in [export-schema.md](export-schema.md).
 
 ## 18. Test matrix (`packages/sdk/test`)
 
@@ -260,5 +289,13 @@ Orders placed on bar N fill at bar N+1's open with `slippageBps` against the tra
 | integration/convergence | synthetic world where the optimal rule is "long when a > 0.6 and b < 0.3" with noise; 8 strategies, 10 cycles, a fake LLM that moves mutations toward the best parent; population CI rises over at least 3 consecutive cycles and the best strategy is within one step of the optimum |
 | integration/curvefit | a candidate that beats train by more than 20 % but loses on holdout is rejected with reason `holdout` |
 | integration/loop | full run flow with a synthetic candle source and the paper executor (seed, warm-up, backfill, episodes, cycles, files); approval, approve from a fresh process, rollback, reject; ensemble arithmetic; `parseEvery` |
+| unit/replay | bar replay matches a real paper executor fed the same decisions; determinism across bar order; look-ahead (later bars changed, window unchanged; a cheating pack is caught); stop-first when a bar hits both levels; funding accrual on and off |
+| unit/events, unit/store | typed emitter semantics and a throwing handler; bars table and bars.jsonl with ext, ranges and reopen; `runMany`; canonical export form |
+| integration/v020 | a paper run emits every event with the documented payload, a throwing handler does not stop the run, usage and dollars add up; `cycleMaxWait` fires early; an inactive strategy ranks last and retires with reason `inactive`; `export()` has `schemaVersion` 1 and stable key order, `status()`, `setApproval`, `pause`; `wrapLLM` hooks, retries on 503, an `llm_error` cycle that leaves the population intact; two loops side by side |
+| integration/crash | a child process is killed with SIGKILL at each of the seven cycle steps and resumes with exactly one recorded cycle |
 
-`packages/source-hyperliquid/test` covers history paging and forming-candle exclusion with a mocked fetch, and subscription, candle close detection, pings, `return()` and reconnect with a fake socket. `packages/executor-paper/test` checks the plugin satisfies `Executor` with the reference defaults.
+`packages/source-hyperliquid/test` covers history paging and forming-candle exclusion with a mocked fetch, subscription, candle close detection, pings, `return()`, reconnect backoff and its reset, gap refill order, the stale flag, the rate budget and 429 backoff, `withAssetCtx` ext fields and the funding backfill. `packages/executor-paper/test` checks the plugin satisfies `Executor` with the reference defaults.
+
+## 19. Events (`events.ts`)
+
+`TypedEmitter` backs `loop.on` and `loop.off`. `emit` copies the handler set before calling, wraps every handler in try/catch, and reports a throwing handler as `error { scope: 'handler:<event>', message }`; a throwing `error` handler is swallowed so the emitter never recurses. The `EventMap` type is the contract: `bar`, `decision`, `trade:open`, `trade:close`, `cycle:start`, `cycle:step` (`collect`, `rank`, `diagnose`, `generate`, `trial`, `validate`, `promote`), `critique`, `candidate` (stages `sandbox`, `guards`, `trial`, `holdout`, `slot`, `promoted`, `pending`), `promote`, `retire`, `cycle:end` (outcomes `promoted`, `no_change`, `pending`, `error`), `pending`, `approved`, `rejected`, `rollback`, `llm`, `error`, `log`, `seed`, `episode`, `cycle`, `pause`, `resume`, `stop`. Payloads are listed in the README. The 0.1.0 `loop.events` emitter keeps firing its seven events; a legacy `error` listener receives an `Error` object only when one is registered.

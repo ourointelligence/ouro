@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { Bounds, Diagnosis, Proposal, SeedProposal, Strategy } from './types.js';
 import type { LLM } from './plugins.js';
 import { OURO_NAME } from './constants.js';
-import { completeJson } from './llm/json.js';
+import { completeJson, type LLMCallInfo } from './llm/json.js';
 
 export type PrimitiveDoc = { key: string; doc: string };
 
@@ -19,6 +19,8 @@ export type GeneratorDeps = {
   maxTokens?: number;
   /** The strongest live strategies, shown to mutate and crossbreed as a reference point. */
   strongSummaries?: LiveSummary[];
+  /** Called after every model call with its usage. */
+  onCall?: (info: LLMCallInfo) => void;
 };
 
 export type LiveSummary = { id: string; describe: string; params: Record<string, number>; holdoutScore?: number };
@@ -126,7 +128,7 @@ GOAL: ${goal}
 Write ${k} strategies that are structurally different from each other: different core signals (trend, momentum, mean reversion, volatility breakout, time-of-day filters, volume confirmation), different holding styles (tight stop and target versus signal-to-signal) and at least one that also trades short. Each must be a complete module obeying the contract.
 ${constraintsSection(deps.constraints)}
 Return { "strategies": [ ...${k} strategy objects... ] }.`;
-  const out = await completeJson(deps.llm, { system: systemPrompt(d), user, schema: SeedOut, maxTokens: deps.maxTokens ?? 8192 });
+  const out = await completeJson(deps.llm, { system: systemPrompt(d), user, schema: SeedOut, maxTokens: deps.maxTokens ?? 8192, onCall: deps.onCall });
   return out.strategies.slice(0, k).map((o) => ({ origin: 'seed' as const, parentIds: [], code: o.code, params: o.params, rationale: o.rationale }));
 }
 
@@ -144,7 +146,7 @@ Produce exactly ONE mutation of the parent. Choose one of:
 Do not rewrite the strategy. Keep the same keys in params unless you swap a feature that needs a new threshold. If the parent read a feature that was null too often, add a null guard rather than removing the idea.
 ${constraintsSection(deps.constraints)}
 Return one strategy object { "code", "params", "bounds", "rationale" }.`;
-  const out = await completeJson(deps.llm, { system: systemPrompt(deps), user, schema: ProposalOut, maxTokens: deps.maxTokens ?? 4096 });
+  const out = await completeJson(deps.llm, { system: systemPrompt(deps), user, schema: ProposalOut, maxTokens: deps.maxTokens ?? 4096, onCall: deps.onCall });
   return [toProposal(out, 'mutate', [strategy.id])];
 }
 
@@ -160,7 +162,7 @@ ${strategySection('PARENT B (exit and filter donor)', b)}
 Produce exactly ONE child: take the entry signal from parent A and the exit rules and filters (stop, tp, time or volume filters, flat conditions) from parent B. Merge params from both parents, keeping each inside its bounds. The child must still obey the contract.
 ${constraintsSection(deps.constraints)}
 Return one strategy object { "code", "params", "bounds", "rationale" }.`;
-  const out = await completeJson(deps.llm, { system: systemPrompt(deps), user, schema: ProposalOut, maxTokens: deps.maxTokens ?? 4096 });
+  const out = await completeJson(deps.llm, { system: systemPrompt(deps), user, schema: ProposalOut, maxTokens: deps.maxTokens ?? 4096, onCall: deps.onCall });
   return [toProposal(out, 'crossbreed', [a.id, b.id])];
 }
 
@@ -186,7 +188,7 @@ ${live || '- none'}
 Write ONE new strategy that is structurally different from every live strategy: a different core signal or a different combination of features, informed by the diagnosis. Obey the contract.
 ${constraintsSection(deps.constraints)}
 Return one strategy object { "code", "params", "bounds", "rationale" }.`;
-  const out = await completeJson(deps.llm, { system: systemPrompt(d), user, schema: ProposalOut, maxTokens: deps.maxTokens ?? 4096 });
+  const out = await completeJson(deps.llm, { system: systemPrompt(d), user, schema: ProposalOut, maxTokens: deps.maxTokens ?? 4096, onCall: deps.onCall });
   return [toProposal(out, 'fresh', [])];
 }
 

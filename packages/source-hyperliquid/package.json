@@ -1,6 +1,6 @@
 {
   "name": "@ourointelligence/source-hyperliquid",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "OURO Source plugin for Hyperliquid public candles (websocket subscription plus candleSnapshot history). No API key.",
   "license": "MIT",
   "type": "module",
@@ -57,10 +57,10 @@
     "ws": "^8.22.0"
   },
   "peerDependencies": {
-    "@ourointelligence/sdk": "workspace:^"
+    "@ourointelligence/sdk": "^0.2.0"
   },
   "devDependencies": {
-    "@ourointelligence/sdk": "workspace:^",
+    "@ourointelligence/sdk": "^0.2.0",
     "@types/node": "^22.18.0",
     "@types/ws": "^8.18.2",
     "tsup": "^8.5.1",

@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import type { LLM } from '../plugins.js';
+import type { LLM, LLMResponse } from '../plugins.js';
 
 export type OpenAIOptions = { apiKey?: string; model?: string; baseUrl?: string; fetch?: typeof globalThis.fetch };
 
@@ -33,7 +33,12 @@ export function openai(opts: OpenAIOptions = {}): LLM {
           { role: 'user', content: req.user },
         ],
       });
-      return res.choices[0]?.message?.content ?? '';
+      const out: LLMResponse = {
+        text: res.choices[0]?.message?.content ?? '',
+        usage: { inputTokens: res.usage?.prompt_tokens ?? 0, outputTokens: res.usage?.completion_tokens ?? 0 },
+        model: res.model ?? model,
+      };
+      return out;
     },
   };
 }

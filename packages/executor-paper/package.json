@@ -1,6 +1,6 @@
 {
   "name": "@ourointelligence/executor-paper",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "OURO paper Executor plugin: fills at next bar open with fees and slippage, one position per strategy per asset, outcomes with bar-by-bar drawdown.",
   "license": "MIT",
   "type": "module",
@@ -54,10 +54,10 @@
     "test": "vitest run"
   },
   "peerDependencies": {
-    "@ourointelligence/sdk": "workspace:^"
+    "@ourointelligence/sdk": "^0.2.0"
   },
   "devDependencies": {
-    "@ourointelligence/sdk": "workspace:^",
+    "@ourointelligence/sdk": "^0.2.0",
     "@types/node": "^22.18.0",
     "tsup": "^8.5.1",
     "vitest": "^3.2.7"

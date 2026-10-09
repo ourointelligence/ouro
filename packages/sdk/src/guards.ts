@@ -61,6 +61,8 @@ export type GuardContext = {
   parents?: Strategy[];
   /** Isolate id to compile under; defaults to a temporary id. */
   id?: string;
+  /** Replaces the episode replay for the risk checks (bar-level replay in 0.2.0). Runs when given, even with no episodes. */
+  replayFn?: (strategy: { id: string; code: string; params: Record<string, number> }) => Promise<ReplayResult>;
 };
 
 export type GuardVerdict =
@@ -156,9 +158,10 @@ export async function check(proposal: AnyProposal, config: GuardConfig, ctx: Gua
 
   // risk: replay on the provided episodes
   let result: ReplayResult | null = null;
-  if (ctx.episodes.length) {
+  if (ctx.replayFn || ctx.episodes.length) {
     try {
-      result = await replay(ctx.episodes, { id: module.id, code: proposal.code, params }, ctx.scorer, ctx.sandbox);
+      const target = { id: module.id, code: proposal.code, params };
+      result = ctx.replayFn ? await ctx.replayFn(target) : await replay(ctx.episodes, target, ctx.scorer, ctx.sandbox);
     } catch (err) {
       cleanup();
       return { ok: false, reason: `sandbox: ${(err as Error).message}` };

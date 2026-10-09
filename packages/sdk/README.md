@@ -23,4 +23,6 @@ const loop = createLoop({
 await loop.start();
 ```
 
+Since 0.2.0: typed events through `loop.on('cycle:end', handler)` (bars, trades, every cycle step, candidates, promotions, model usage), bar-level replay (candidates are re-run over the stored bars with the paper fill model), `cycleMaxWait`, `minTradesPerWindow`, `pause()`, `status()`, `export()` with `schemaVersion: 1`, `wrapLLM` for counting usage, and `Bar.ext` for funding and open interest. See CHANGELOG.md.
+
 Full documentation, the CLI reference, the SI terms and the going-live guide: https://github.com/ourointelligence/ouro (README and `docs/`). Plugin interfaces: `docs/plugins.md`. Website: https://ourosi.xyz

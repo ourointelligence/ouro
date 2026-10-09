@@ -1,4 +1,4 @@
-import type { Bar, Decision, Input, Outcome, FeatureValue } from './types.js';
+import type { Bar, Decision, Input, Outcome, FeatureValue, LLMUsage } from './types.js';
 
 /** Where inputs come from: a venue websocket, a chain RPC, an API, a file, a synthetic generator. */
 export interface Source {
@@ -12,6 +12,8 @@ export interface Executor {
   name: string;
   place(d: NonNullable<Decision>, x: Input): Promise<{ orderId: string }>;
   onClose(cb: (strategyId: string, outcome: Outcome) => void): void;
+  /** Optional: report a filled entry so the loop can emit trade:open with the real fill price. */
+  onOpen?(cb: (strategyId: string, info: { asset: string; side: 'long' | 'short'; size: number; price: number; ts: number }) => void): void;
   /**
    * Optional: the loop calls this with every new bar before any decision is made on it.
    * Executors that simulate fills (paper) or need mark prices for stops use it.
@@ -28,10 +30,18 @@ export interface PrimitivePack {
   describe(): Array<{ key: string; doc: string }>;
 }
 
-/** One model behind one method. Adapters must return a JSON document as a string. */
+export type LLMRequest = { system: string; user: string; json: true; maxTokens?: number };
+
+/** What an adapter may return besides a plain string: the text plus token usage and the model that answered. */
+export type LLMResponse = { text: string; usage?: LLMUsage; model?: string };
+
+/**
+ * One model behind one method. Adapters return the model's reply, which must be a JSON document, either as a plain
+ * string (0.1.0 adapters) or as { text, usage, model } so the loop can account for tokens.
+ */
 export interface LLM {
   name: string;
-  complete(req: { system: string; user: string; json: true; maxTokens?: number }): Promise<string>;
+  complete(req: LLMRequest): Promise<string | LLMResponse>;
 }
 
 export type Plugin = Source | Executor | PrimitivePack | LLM;

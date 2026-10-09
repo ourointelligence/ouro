@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import type { LLM } from '../plugins.js';
+import type { LLM, LLMResponse } from '../plugins.js';
 
 export type AnthropicOptions = { apiKey?: string; model?: string; baseUrl?: string; fetch?: typeof globalThis.fetch };
 
@@ -34,9 +34,13 @@ export function anthropic(opts: AnthropicOptions = {}): LLM {
         system: `${req.system}\n\nReply with a single JSON document and nothing else.`,
         messages: [{ role: 'user', content: req.user }],
       });
-      return res.content
-        .map((c) => (c.type === 'text' ? c.text : ''))
-        .join('');
+      const text = res.content.map((c) => (c.type === 'text' ? c.text : '')).join('');
+      const out: LLMResponse = {
+        text,
+        usage: { inputTokens: res.usage?.input_tokens ?? 0, outputTokens: res.usage?.output_tokens ?? 0 },
+        model: res.model ?? model,
+      };
+      return out;
     },
   };
 }

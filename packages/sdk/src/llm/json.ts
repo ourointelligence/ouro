@@ -1,5 +1,6 @@
 import type { z } from 'zod';
-import type { LLM } from '../plugins.js';
+import type { LLM, LLMRequest, LLMResponse } from '../plugins.js';
+import type { LLMUsage } from '../types.js';
 
 export class LLMOutputError extends Error {
   constructor(
@@ -29,6 +30,27 @@ export function extractJson(text: string): string {
   return end > start ? t.slice(start, end + 1) : t.slice(start);
 }
 
+/** What one completed call looked like, for usage accounting. */
+export type LLMCallInfo = { model: string; usage: LLMUsage; ms: number; attempt: number };
+
+/** Normalise an adapter reply (string in 0.1.0, object since 0.2.0) to { text, usage, model }. */
+export function normaliseResponse(reply: string | LLMResponse, fallbackModel: string): Required<LLMResponse> {
+  if (typeof reply === 'string') return { text: reply, usage: { inputTokens: 0, outputTokens: 0 }, model: fallbackModel };
+  return {
+    text: typeof reply.text === 'string' ? reply.text : String(reply.text ?? ''),
+    usage: reply.usage ?? { inputTokens: 0, outputTokens: 0 },
+    model: reply.model ?? fallbackModel,
+  };
+}
+
+/** Call an adapter and return the normalised reply plus timing; the one place every model call goes through. */
+export async function completeText(llm: LLM, req: LLMRequest, onCall?: (info: LLMCallInfo) => void, attempt = 1): Promise<Required<LLMResponse>> {
+  const t0 = Date.now();
+  const reply = normaliseResponse(await llm.complete(req), llm.name.replace(/^[a-z]+:/, ''));
+  onCall?.({ model: reply.model, usage: reply.usage, ms: Date.now() - t0, attempt });
+  return reply;
+}
+
 export type JsonRequest<T> = {
   system: string;
   user: string;
@@ -36,6 +58,8 @@ export type JsonRequest<T> = {
   maxTokens?: number;
   /** Total attempts. The spec: retry once on invalid output, then throw. */
   attempts?: number;
+  /** Called after every model call with its usage. */
+  onCall?: (info: LLMCallInfo) => void;
 };
 
 /**
@@ -51,7 +75,8 @@ export async function completeJson<T>(llm: LLM, req: JsonRequest<T>): Promise<T>
       attempt === 0
         ? req.user
         : `${req.user}\n\nYour previous reply was not valid: ${lastError}\nReply again with only the JSON object, no prose, no code fences.`;
-    const raw = await llm.complete({ system: req.system, user, json: true, maxTokens: req.maxTokens });
+    const reply = await completeText(llm, { system: req.system, user, json: true, maxTokens: req.maxTokens }, req.onCall, attempt + 1);
+    const raw = reply.text;
     lastRaw = raw;
     let parsed: unknown;
     try {

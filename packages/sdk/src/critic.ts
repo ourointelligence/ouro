@@ -2,10 +2,18 @@ import { z } from 'zod';
 import type { Diagnosis, Episode, Strategy } from './types.js';
 import type { LLM } from './plugins.js';
 import { OURO_NAME } from './constants.js';
-import { completeJson } from './llm/json.js';
+import { completeJson, type LLMCallInfo } from './llm/json.js';
 import { scanFeatureKeys } from './sandbox.js';
 
-export type CriticDeps = { llm: LLM; goal?: string; maxTokens?: number; /** Approximate prompt budget in tokens. Default 4000. */ budgetTokens?: number };
+export type CriticDeps = {
+  llm: LLM;
+  goal?: string;
+  maxTokens?: number;
+  /** Approximate prompt budget in tokens. Default 4000. */
+  budgetTokens?: number;
+  /** Called after every model call with its usage. */
+  onCall?: (info: LLMCallInfo) => void;
+};
 
 const DiagnosisOut = z.object({
   patterns: z.array(z.string()).max(8),
@@ -95,7 +103,7 @@ export async function diagnose(
   deps: CriticDeps,
 ): Promise<Diagnosis> {
   const user = buildCriticPrompt(weakEpisodes, strongEpisodes, liveStrategies, deps.goal, deps.budgetTokens);
-  const out = await completeJson(deps.llm, { system: CRITIC_SYSTEM, user, schema: DiagnosisOut, maxTokens: deps.maxTokens ?? 1024 });
+  const out = await completeJson(deps.llm, { system: CRITIC_SYSTEM, user, schema: DiagnosisOut, maxTokens: deps.maxTokens ?? 1024, onCall: deps.onCall });
   const known = new Set(liveStrategies.map((s) => s.id));
   const words = out.summary.split(/\s+/);
   const weakSet = new Set(Object.keys(weakEpisodes));

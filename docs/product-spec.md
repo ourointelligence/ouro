@@ -39,7 +39,7 @@ The number everyone watches is the **Capability Index (CI)**: a strategy's holdo
 | Scorer | Turns an outcome into a number the loop can compare | `score(episode) => number` |
 | Critic | LLM step that reads failures and explains why | `diagnose(weak, strong, live)` |
 | Generator | LLM step that writes new strategies and mutations | `seed`, `mutate`, `crossbreed`, `fresh` |
-| Trial | Strategies replayed on the same episodes, train and holdout | `split` and `replay` in the trial harness |
+| Trial | Strategies re-run over the same stored bars (or the same episodes), train and holdout | `split`, `replayBars` and `replay` in the trial harness |
 | Promotion | A strategy enters the live population, or is retired | Versioned `history.json` |
 | Guard | A rule the loop may never break | Sandbox, bounds, allow, freeze, drawdown and size caps, approval |
 | Source | Where inputs come from | Plugin: `subscribe()` and `history()` |
@@ -47,18 +47,18 @@ The number everyone watches is the **Capability Index (CI)**: a strategy's holdo
 
 ## 4. The loop
 
-One cycle runs automatically once every live strategy has `cycleEvery` new episodes, on a timer (`start({ every })`), or on demand (`cycle()`). The SDK runs a population at once, so every cycle is both an edit to the survivors and a search for new ones.
+One cycle runs automatically once every live strategy has `cycleEvery` new episodes, or once `cycleMaxWait` of bar time has passed since the last cycle with at least one new episode (so one quiet strategy cannot freeze the loop), on a timer (`start({ every })`), or on demand (`cycle()`). The SDK runs a population at once, so every cycle is both an edit to the survivors and a search for new ones. Every step is reported through typed events (`cycle:start`, `cycle:step`, `critique`, `candidate`, `promote`, `retire`, `cycle:end`), so a dashboard can show the loop thinking.
 
 1. **Seed** (first run only): the Generator reads the goal and the primitive docs and writes K strategies. Each passes the sandbox and the guards before it may run. User-supplied modules (`seed: [...]`) come first, origin `user`.
 2. **Collect**: the last `cycleEvery` episodes of every live strategy, pooled, split chronologically into train (older) and holdout (newest, untouched).
-3. **Rank**: every live strategy is replayed on the pooled holdout. The bottom share (`retireShare`, default a quarter, at least one) is marked weak; the top two are strong.
+3. **Rank**: every live strategy is re-run over the holdout window. A strategy with fewer than `minTradesPerWindow` closed trades since the last cycle (default 3) ranks weakest regardless of score, so strategies that never trade are retired first (reason `inactive`). The bottom share (`retireShare`, default a quarter, at least one) is marked weak; the top two active strategies are strong.
 4. **Diagnose**: the Critic reads the worst episodes of the weak strategies and the best of the strong ones and writes a short diagnosis: patterns, a summary, weak and strong ids.
 5. **Generate**: one mutation per weak strategy, one crossbreed of the two strong ones, one fresh strategy written from the diagnosis, capped at `maxProposalsPerCycle`. Every candidate must pass the sandbox and the guards.
-6. **Trial**: candidates are replayed on train; those that do not beat the population median by the margin are rejected (`train margin`).
-7. **Validate**: survivors are replayed on holdout; each must beat the weakest live strategy not yet replaced, else it is rejected (`holdout`). Winners on train that lose on holdout are curve-fit and never enter.
+6. **Trial**: candidates are re-run over the stored bars of the train window with the paper fill model (`replay: 'bars'`, the default), so a new idea is scored on what it would have done; those that do not beat the population median by the margin are rejected (`train margin`).
+7. **Validate**: survivors are re-run over the holdout window; each must beat the weakest live strategy not yet replaced, else it is rejected (`holdout`). Winners on train that lose on holdout are curve-fit and never enter.
 8. **Promote**: each winner replaces its target. Population size stays at K. Everything is written to history with scores and rationale, CI is recomputed, `takeoff.json` is rewritten.
 
-If no candidate survives, the cycle records `no_change`. That is a valid and common result. If there is not enough data, the cycle returns `no_change` with the note `not enough data` and is not recorded.
+If no candidate survives, the cycle records `no_change`. That is a valid and common result. If there is not enough data, the cycle returns `no_change` with the note `not enough data` and is not recorded. If the model cannot be reached after the retries, the cycle is recorded with status `error` and the note `llm_error`, the population stays as it was, and trading continues; the loop never crashes because a provider is down. Every model call reports its token usage, summed per cycle and priced in dollars when `llmPricing` is set.
 
 ## 5. Strategy modes
 
@@ -87,7 +87,12 @@ If no candidate survives, the cycle records `no_change`. That is a valid and com
 | `loop.record(episode)` | Scores (if unscored) and appends one episode |
 | `loop.cycle()` | Runs one improvement cycle; returns `{ cycle, status, promoted, retired, rejected, diagnosis, populationCI }` |
 | `loop.start({ every? })` | Seeds if needed, warms up, trades through backfill, subscribes to live bars, cycles automatically; `every` adds a timer |
-| `loop.stop()` | Ends the subscription, clears the timer, closes open paper positions |
+| `loop.stop()` | Waits for a running cycle, ends the subscription, clears the timer, closes open paper positions, flushes the store |
+| `loop.pause(reason?)` / `loop.resume()` | Keep receiving bars but make no decisions and run no cycles until resumed |
+| `loop.setApproval(on)` | Turn the approval switch on or off at runtime |
+| `loop.export()` | The versioned export (`schemaVersion: 1`) in canonical key order |
+| `loop.status()` | Running, paused, cycle count, live and total strategies, episodes, pending cycle, approval, last bar and cycle times |
+| `loop.on(event, handler)` / `loop.off(event, handler)` | Typed events: bars, decisions, trades, every cycle step, the critique, every candidate with its fate, promotions, retirements, cycle ends with usage, pending, approved, rejected, rollback, model calls, errors |
 | `loop.approve(cycle)` / `loop.reject(cycle)` | Apply or discard a pending cycle |
 | `loop.population()` | Live strategies with trial scores and CI |
 | `loop.history()` | Every strategy ever generated and every cycle |
@@ -96,16 +101,16 @@ If no candidate survives, the cycle records `no_change`. That is a valid and com
 | `loop.takeoff()` | `[{ cycle, populationCI, bestCI, velocity }]` |
 | `loop.use(plugin)` | Registers a source, executor, primitive pack or LLM adapter |
 | `loop.ready()` / `loop.cycleCount()` / `loop.close()` | Whether a cycle is due; completed cycles; release everything |
-| `loop.events` | `log`, `seed`, `bar`, `decision`, `episode`, `cycle`, `error` |
+| `loop.events` | The 0.1.0 emitter: `log`, `seed`, `bar`, `decision`, `episode`, `cycle`, `error` |
 
-Config: `{ goal, primitives, source, executor | 'paper', score, llm?, population? (8), cycleEvery? (50), holdout? (0.3), margin? (0.05), guards?, seed?, allow?, bounds?, freeze?, ensemble? ('weighted'), dir? ('.ouro'), assets, tf, warmupBars? (300), backfill? (0), dispatch? ('per-strategy'), retireShare? (0.25), autoCycle? (true), sandbox?, log? }`.
+Config: `{ goal, primitives, source, executor | 'paper', score, llm?, population? (8), cycleEvery? (50), cycleMaxWait? (off), minTradesPerWindow? (3), holdout? (0.3), margin? (0.05), guards?, seed?, allow?, bounds?, freeze?, ensemble? ('weighted'), dir? ('.ouro'), assets, tf, warmupBars? (300), backfill? (0), dispatch? ('per-strategy'), retireShare? (0.25), autoCycle? (true), replay? ('bars'), replayPaper?, llmPricing?, llmRetry? ({ retries: 2, baseMs: 1000 }), seedRetryMs? (60000), sandbox?, log? }`.
 
 ## 8. Outputs people can show
 
 - A population table: every live strategy with origin (`seed`, `mutate`, `crossbreed`, `fresh`, `user`), the cycle it was born, holdout score, CI and a one-sentence description.
 - A takeoff curve: population CI, best CI and velocity per cycle, with a ceiling flag when velocity flattens.
 - Readable code for every strategy ever generated, with parents and rationale, so a non-coder can see what changed and why.
-- A standard `ouro.json` export (`population`, `history`, `takeoff`, `goal`, `createdAt`) so any dashboard, bot or on-chain registry can display the track record.
+- A standard `ouro.json` export with `schemaVersion: 1` (`goal`, `createdAt`, `cycle`, `population`, `history`, `takeoff`) in canonical key order, documented in `docs/export-schema.md`, so any dashboard, bot, hash chain or on-chain registry can display and verify the track record.
 
 ## 9. SI terms
 
@@ -134,7 +139,7 @@ The token is separate from the SDK. The SDK is free, MIT licensed and works with
 
 ## 12. Non-goals for v1
 
-No hosted runs, no dashboard web app, no exchange connectors beyond the Hyperliquid candle source, no Python port, no full re-simulation replay. Each is a later package.
+No hosted runs, no dashboard web app, no exchange connectors beyond the Hyperliquid candle source, no Python port. Each is a later package. (Full re-simulation replay was a v1 non-goal and shipped in 0.2.0 as bar-level replay.)
 
 ## 13. Decisions where the build deliberately differs from the original spec text
 
@@ -145,3 +150,7 @@ No hosted runs, no dashboard web app, no exchange connectors beyond the Hyperliq
 - **`Executor.onBar` and `stop`.** Optional hooks on the Executor interface. The loop calls `onBar(bar)` with every new bar before any decision on it, which is how the paper executor fills at the next open and tracks stops; `stop()` closes positions on shutdown.
 - **Anthropic default model.** `claude-sonnet-5-5` instead of the `claude-sonnet-4-5` the original spec named, because that model is deprecated with an end of life on 2026-11-30. `OURO_MODEL` overrides it. Temperature 0 is only sent to models that accept a temperature parameter; Claude 4.6 and later reject it.
 - **Not-enough-data cycles are not recorded**, so they do not consume a cycle number or add a flat takeoff row.
+- **Bar replay by default (0.2.0).** Trial and validation re-run a candidate's `decide` over the stored bars of the window with the paper fill model instead of crediting stored outcomes, because outcome replay scored a genuinely new idea at zero whenever its trades differed from the live population's and pushed the population toward copies of itself. `replay: 'outcome'` keeps the 0.1.0 behaviour; it is also the fallback when no bars are stored.
+- **Max wait (0.2.0).** `cycleMaxWait` fires a cycle on bar time even when a strategy is short of `cycleEvery` episodes, because one rarely-trading strategy otherwise stalls the whole loop for days. Such a cycle ranks strategies with what they have.
+- **Minimum activity (0.2.0).** `minTradesPerWindow` ranks a strategy with too few closed trades as the weakest, so a strategy that never trades (score zero, never loses) cannot squat a slot forever; it retires with reason `inactive`.
+- **Usage events (0.2.0).** Adapters return token usage, every call is an `llm` event and each cycle carries its usage and cost, because a self-improving loop that spends money needs a per-cycle bill. Plain-string adapters still work and report zero.

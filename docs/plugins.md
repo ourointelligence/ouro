@@ -8,7 +8,7 @@ import type { Source, Executor, PrimitivePack, LLM } from '@ourointelligence/sdk
 
 ## Source
 
-A Source pulls history for warm-up and backfill and streams live bars. Bars are `{ ts, asset, tf, o, h, l, c, v }` with `ts` in milliseconds. `history` must return closed bars only, sorted by time, for every asset asked for; `subscribe` must yield each bar once, when it has closed. The loop calls `iterator.return()` on stop, so release sockets there.
+A Source pulls history for warm-up and backfill and streams live bars. Bars are `{ ts, asset, tf, o, h, l, c, v }` with `ts` in milliseconds, plus two optional fields: `ext`, a map of extra numbers (funding rate, open interest, premium, anything your venue reports) that primitive packs can read and that the store keeps for replay, and `stale`, which a source sets on a bar that arrived more than two intervals late so the loop records it without trading on it. `history` must return closed bars only, sorted by time, for every asset asked for; `subscribe` must yield each bar once, when it has closed. The loop calls `iterator.return()` on stop, so release sockets there.
 
 ```ts
 import type { Bar, Source } from '@ourointelligence/sdk';
@@ -67,11 +67,23 @@ export function myVenue(opts: { rest: string; ws: string }): Source {
 }
 ```
 
-A file or a generator function works too: `async *subscribe() { for (const bar of rows) yield bar; }`. The shipped `@ourointelligence/source-hyperliquid` is the reference implementation, including paging and reconnects.
+A file or a generator function works too: `async *subscribe() { for (const bar of rows) yield bar; }`. The shipped `@ourointelligence/source-hyperliquid` is the reference implementation: paging, reconnect with backoff, gap refill, the stale flag, a rate budget and market context.
+
+```ts
+import { hyperliquid, withAssetCtx } from '@ourointelligence/source-hyperliquid';
+
+// one WebSocket, at most 200 request weight per minute, notices to your log
+const source = hyperliquid({ rateLimit: { weightPerMinute: 200 }, onEvent: (e) => console.log(e) });
+
+// bar.ext gets funding.rate, oi, oi.change, premium, mark and oracle from metaAndAssetCtxs once per bar close,
+// and funding.rate is backfilled for history from fundingHistory
+const withContext = withAssetCtx(source);   // or hyperliquid({ assetCtx: true, ... })
+withContext.stats();                         // { weightUsedLastMinute, requests, reconnects, gapsFilled, lastBarTs, connected }
+```
 
 ## Executor
 
-An Executor receives decisions and reports closed outcomes. The loop tags every order with the strategy that made it in `x.meta.strategyId` (the string `'ensemble'` under `dispatch: 'ensemble'`). When a position closes, call every `onClose` listener with that strategy id and an `Outcome`; put the asset in `outcome.raw.asset` so the loop can attribute the close when a strategy trades several assets. Two optional hooks: `onBar(bar)` is called with every new bar before any decision is made on it (use it to simulate fills, mark positions, check stops), and `stop()` is called on shutdown.
+An Executor receives decisions and reports closed outcomes. The loop tags every order with the strategy that made it in `x.meta.strategyId` (the string `'ensemble'` under `dispatch: 'ensemble'`). When a position closes, call every `onClose` listener with that strategy id and an `Outcome`; put the asset in `outcome.raw.asset` so the loop can attribute the close when a strategy trades several assets. Three optional hooks: `onBar(bar)` is called with every new bar before any decision is made on it (use it to simulate fills, mark positions, check stops), `stop()` is called on shutdown, and `onOpen(cb)` lets you report a filled entry as `{ asset, side, size, price, ts }` so the loop's `trade:open` event carries the real fill price (without it the loop reports the decision price when the order is placed).
 
 Units are yours to choose but must be consistent with the scorer and the guards: the built-in paper executor reports `pnl`, `fees` and `drawdown` in percent of equity, treats `size` as a fraction of equity, and `stop`/`tp` as price distances from entry.
 
@@ -130,9 +142,11 @@ export function webhookExecutor(url: string): Executor {
 
 Register with `executor: webhookExecutor('https://...')` and run with `ouro run --live` (which requires `guards.requireApproval: true`).
 
+Bar replay (`replay: 'bars'`, the default since 0.2.0) scores candidates with the built-in paper fill model regardless of which executor is live, reading `feeBps`, `slippageBps` and `funding` from the paper executor when that is what runs, or from `replayPaper` in the loop config otherwise. If your live executor fills differently, set `replayPaper` to the closest approximation.
+
 ## PrimitivePack
 
-A pack turns a bar series into named features. `compute(bars, i)` returns the features for `bars[i]` given everything up to it; return `null` while an indicator has no data, never `NaN`. Keys are unprefixed inside the pack; the loop prefixes them with the pack name, so a pack named `flow` with a key `imbalance` becomes `x.features['flow.imbalance']`. `describe()` is what the Generator is shown: one entry per key, a sentence a model can act on, including units and typical ranges. Features can be numbers or booleans.
+A pack turns a bar series into named features. `compute(bars, i)` returns the features for `bars[i]` given everything up to it; return `null` while an indicator has no data, never `NaN`. Never read `bars[i + 1]` or later: bar replay feeds packs the full stored series with the index of the decision bar, and the SDK's look-ahead test checks that nothing inside a window changes when later bars change. Extra fields a source attached are available as `bars[i].ext?.['funding.rate']` and so on; a pack that uses them should return `null` when the key is absent. Keys are unprefixed inside the pack; the loop prefixes them with the pack name, so a pack named `flow` with a key `imbalance` becomes `x.features['flow.imbalance']`. `describe()` is what the Generator is shown: one entry per key, a sentence a model can act on, including units and typical ranges. Features can be numbers or booleans.
 
 ```ts
 import type { Bar, FeatureValue, PrimitivePack } from '@ourointelligence/sdk';
@@ -182,7 +196,7 @@ Register with `primitives: [primitives.ta, structure(20)]` or `loop.use(structur
 
 ## LLM adapter
 
-An adapter is one method. It receives a system prompt and a user prompt, must run the model deterministically (temperature 0 where the model accepts it) and must return the model's reply as a string that contains one JSON document. The SDK extracts the JSON, validates it with zod, retries once with the error appended, and throws if the second reply is invalid; nothing invalid reaches trial. Adapters should honour `maxTokens`.
+An adapter is one method. It receives a system prompt and a user prompt, must run the model deterministically (temperature 0 where the model accepts it) and must return the model's reply, which contains one JSON document, either as a plain string or as `{ text, usage: { inputTokens, outputTokens }, model }`. Returning the object lets the loop count tokens: every call becomes an `llm` event and the cycle's usage (and dollars, with `llmPricing`) lands in `cycle:end`. The four built-in adapters return it. The SDK extracts the JSON, validates it with zod, retries once with the error appended, and throws if the second reply is invalid; nothing invalid reaches trial. Adapters should honour `maxTokens`. When an adapter throws (network, 5xx, timeout) the loop retries twice with backoff (`llmRetry`), then records the cycle as `error` with reason `llm_error` and keeps trading.
 
 ```ts
 import type { LLM } from '@ourointelligence/sdk';
@@ -211,7 +225,7 @@ export function chatCompletions(opts: { url: string; model: string; apiKey?: str
       const body = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
       const text = body.choices?.[0]?.message?.content;
       if (typeof text !== 'string') throw new Error('chat: empty reply');
-      return text;
+      return { text, usage: { inputTokens: body.usage?.prompt_tokens ?? 0, outputTokens: body.usage?.completion_tokens ?? 0 }, model: opts.model };
     },
   };
 }
@@ -219,9 +233,56 @@ export function chatCompletions(opts: { url: string; model: string; apiKey?: str
 
 Register with `llm: chatCompletions({ url: 'http://localhost:1234/v1', model: 'my-model' })` or `loop.use(adapter)`. Without `llm`, the loop reads `OURO_LLM` (`anthropic`, `openai`, `gemini`, `ollama`) and `OURO_MODEL`.
 
+### Wrapping an adapter
+
+The built-in adapters (`anthropic`, `openai`, `gemini`, `ollama`) and `resolveLLM` are exported, and `wrapLLM(inner, hooks)` puts your own code around any of them: `before(req)` runs before the call and may throw to refuse it (a budget), `after(res, req, ms)` sees the normalised reply with its usage and may replace it, `onError(err, req)` may recover from a failure. `withRetry(fn, { retries, baseMs })` is the backoff helper the loop itself uses.
+
+```ts
+import { anthropic, wrapLLM } from '@ourointelligence/sdk';
+
+let spentToday = 0;
+const llm = wrapLLM(anthropic(), {
+  before: () => {
+    if (spentToday > 1) {
+      const err = new Error('daily budget reached');
+      err.name = 'BudgetExceeded';   // the loop does not retry this one
+      throw err;
+    }
+  },
+  after: (res, _req, ms) => {
+    spentToday += (res.usage.inputTokens * 3 + res.usage.outputTokens * 15) / 1e6;
+    console.log(`${res.model}: ${res.usage.inputTokens} in, ${res.usage.outputTokens} out, ${ms} ms`);
+  },
+});
+createLoop({ llm, ... });
+```
+
+## Installing from GitHub release files
+
+Until the packages are on the npm registry, install the packed files attached to each GitHub release. The plugin packages declare `@ourointelligence/sdk` as a peer dependency with a normal semver range, so add overrides at the root of your project to make that range resolve to the same release file:
+
+```json
+{
+  "dependencies": {
+    "@ourointelligence/sdk": "https://github.com/ourointelligence/ouro/releases/download/v0.2.0/ourointelligence-sdk-0.2.0.tgz",
+    "@ourointelligence/source-hyperliquid": "https://github.com/ourointelligence/ouro/releases/download/v0.2.0/ourointelligence-source-hyperliquid-0.2.0.tgz",
+    "@ourointelligence/executor-paper": "https://github.com/ourointelligence/ouro/releases/download/v0.2.0/ourointelligence-executor-paper-0.2.0.tgz"
+  },
+  "pnpm": {
+    "overrides": {
+      "@ourointelligence/sdk": "https://github.com/ourointelligence/ouro/releases/download/v0.2.0/ourointelligence-sdk-0.2.0.tgz",
+      "@ourointelligence/source-hyperliquid": "https://github.com/ourointelligence/ouro/releases/download/v0.2.0/ourointelligence-source-hyperliquid-0.2.0.tgz",
+      "@ourointelligence/executor-paper": "https://github.com/ourointelligence/ouro/releases/download/v0.2.0/ourointelligence-executor-paper-0.2.0.tgz"
+    }
+  }
+}
+```
+
+With npm instead of pnpm use the same URLs in `dependencies` and an `overrides` block at the top level. Moving to the registry later is a one-line change per package: replace each URL with the version number and delete the overrides.
+
 ## Checklist
 
 - Source: closed bars only, sorted, one yield per bar, release the socket in `return()`.
-- Executor: read `x.meta.strategyId`, set `outcome.raw.asset`, report `closedTs`, implement `onBar` if fills depend on the next bar, `stop` to flatten on shutdown.
-- PrimitivePack: `null` not `NaN` during warm-up, unprefixed keys, docs with units.
-- LLM: temperature 0 (where accepted), JSON in the reply, errors thrown not swallowed.
+- Executor: read `x.meta.strategyId`, set `outcome.raw.asset`, report `closedTs`, implement `onBar` if fills depend on the next bar, `onOpen` to report fills, `stop` to flatten on shutdown.
+- PrimitivePack: `null` not `NaN` during warm-up, unprefixed keys, docs with units, never look past `bars[i]`.
+- LLM: temperature 0 (where accepted), JSON in the reply, usage in the return value, errors thrown not swallowed.

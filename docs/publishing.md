@@ -61,7 +61,7 @@ for t in /tmp/ouro-pack/*.tgz; do echo "== $t"; tar -tzf "$t" | sort; done
 
 ```bash
 mkdir /tmp/ouro-nooptional && cd /tmp/ouro-nooptional && npm init -y
-npm install --no-optional /tmp/ouro-pack/ourointelligence-sdk-0.1.0.tgz
+npm install --no-optional /tmp/ouro-pack/ourointelligence-sdk-0.2.0.tgz
 ls node_modules/isolated-vm   # must not exist
 npx ouro --version
 ```

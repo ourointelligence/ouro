@@ -54,7 +54,7 @@ importers:
   packages/executor-paper:
     devDependencies:
       '@ourointelligence/sdk':
-        specifier: workspace:^
+        specifier: ^0.2.0
         version: link:../sdk
       '@types/node':
         specifier: ^22.18.0
@@ -120,7 +120,7 @@ importers:
         version: 8.22.0
     devDependencies:
       '@ourointelligence/sdk':
-        specifier: workspace:^
+        specifier: ^0.2.0
         version: link:../sdk
       '@types/node':
         specifier: ^22.18.0

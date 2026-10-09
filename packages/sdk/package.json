@@ -1,6 +1,6 @@
 {
   "name": "@ourointelligence/sdk",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "OURO: recursive self-improvement for any goal. Invents, runs, critiques and rewrites its own population of strategies. Superintelligence you can switch off.",
   "license": "MIT",
   "type": "module",

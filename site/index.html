@@ -580,30 +580,31 @@ footer{border-top:1px solid var(--rule);padding-block:40px;color:var(--fg3);font
     <b>Capability Index</b><span>How much better a strategy is than the first generation, measured on holdout data. The number everyone watches.</span>
     <b>Source</b><span>A plugin that supplies inputs. A websocket of candles, an API, a file.</span>
     <b>Executor</b><span>A plugin that carries out decisions. Paper by default. A venue, a contract, or a webhook when you go live.</span>
+    <b>Events</b><span>Typed notifications the loop emits as it works, subscribed with <code>loop.on(name, handler)</code>: <code>bar</code>, <code>decision</code>, <code>trade:open</code>, <code>trade:close</code>, <code>cycle:start</code>, <code>cycle:step</code>, <code>critique</code>, <code>candidate</code>, <code>promote</code>, <code>retire</code>, <code>cycle:end</code>, <code>pending</code>, <code>approved</code>, <code>rejected</code>, <code>rollback</code>, <code>llm</code> and <code>error</code>. A handler that throws is reported as an error event and never stops the loop.</span>
   </div>
 </section>
 
 <section id="d-loop">
   <span class="label">04 / The loop</span>
   <h2>One cycle, from the first episode to the next promotion.</h2>
-  <p>A cycle runs every time each live strategy has collected a set number of new episodes, forty by default. Here is what happens inside one, in order.</p>
+  <p>A cycle runs every time each live strategy has collected a set number of new episodes, fifty by default (the perp example uses forty), or when <code>cycleMaxWait</code> of bar time has passed since the last cycle and at least one new episode exists, so one quiet strategy cannot freeze the loop. Here is what happens inside one, in order.</p>
   <h3>Seed, once</h3>
   <p>On the very first start there is no population. The Generator reads your goal and the list of primitives you registered and writes eight strategies. Each one is compiled and run inside the sandbox before it is allowed to trade. If any fails, it is thrown out and another is requested. The seed generation becomes the baseline that every later Capability Index is measured against.</p>
   <h3>Collect</h3>
   <p>The loop pulls the most recent episodes for each strategy and splits them by time. The older seventy percent is the training slice. The newest thirty percent is holdout. The split is always by time, never random, because random splits leak the future into the past.</p>
   <h3>Rank</h3>
-  <p>Every live strategy is replayed on its own holdout slice and scored. The bottom quarter is marked for retirement. Marked does not mean gone. A strategy only retires if something better replaces it, so the population never shrinks.</p>
+  <p>Every live strategy is re-run over the holdout window and scored. A strategy with fewer than <code>minTradesPerWindow</code> closed trades since the last cycle (three by default) ranks last whatever its score, so strategies that never trade go first. The bottom quarter is marked for retirement. Marked does not mean gone. A strategy only retires if something better replaces it, so the population never shrinks.</p>
   <h3>Diagnose</h3>
   <p>The Critic receives the ten worst episodes of each weak strategy and the five best of each strong one, summarised as compact rows: time, asset, side, result, how long it held, hour of day, volume ratio, and the three most relevant feature values. It writes back at most five patterns and a summary under sixty words. Something like "losses cluster between 00:00 and 04:00 UTC when volume is below average".</p>
   <h3>Generate</h3>
   <p>The Generator produces candidates in three ways. For each weak strategy it writes a mutation, which changes a parameter inside its declared range or swaps one feature. For the two strongest it writes a crossbreed, which takes the entry logic of one and the exit and filter logic of the other. And it writes one fresh strategy from the diagnosis that is structurally unlike anything alive. Every candidate goes through the sandbox and the guards before it is allowed anywhere near the data.</p>
   <h3>Trial</h3>
-  <p>Candidates are replayed on the training slice. A candidate must beat the median training score of the live population by a margin, five percent by default. Anything that only ties is dropped.</p>
+  <p>Candidates are re-run over the stored bars of the training window with the paper fill model: decide on the closed bar, fill at the next open with fee and slippage, stop and target checked against every later bar. This is the default (<code>replay: 'bars'</code>) since 0.2.0, so a new idea is scored on what it would have done, not only on trades some other strategy took. A candidate must beat the median training score of the live population by a margin, five percent by default. Anything that only ties is dropped.</p>
   <h3>Validate</h3>
-  <p>Survivors are replayed on the holdout slice, which no LLM step has seen. A candidate that won on training and loses on holdout is curve fit. It learned the past instead of the pattern. It is rejected with the reason "holdout" and that rejection is written to history so you can see how often it happens.</p>
+  <p>Survivors are re-run over the holdout window, which no LLM step has seen. A candidate that won on training and loses on holdout is curve fit. It learned the past instead of the pattern. It is rejected with the reason "holdout" and that rejection is written to history so you can see how often it happens.</p>
   <h3>Promote</h3>
   <p>Each survivor replaces the weakest remaining marked strategy. The population stays at eight. The new strategy's code, parameters, parents and rationale go into history along with the scores from both trials. The Capability Index is recomputed for every live strategy and the takeoff file is updated.</p>
-  <p>If nothing survives, the cycle records "no change" and the population is untouched. That is a normal and common outcome. The loop is allowed to find nothing. What it is not allowed to do is promote something that only looked good on data it had already seen.</p>
+  <p>If nothing survives, the cycle records "no change" and the population is untouched. That is a normal and common outcome. The loop is allowed to find nothing. What it is not allowed to do is promote something that only looked good on data it had already seen. If the model cannot be reached after the retries, the cycle is recorded as "error" with the reason <code>llm_error</code>, the population stays as it was, and trading continues. Every model call reports its token usage, and each cycle carries the total, in dollars too when <code>llmPricing</code> is set.</p>
 </section>
 
 <section id="d-modes">
@@ -628,7 +629,7 @@ footer{border-top:1px solid var(--rule);padding-block:40px;color:var(--fg3);font
   <h2>Every brake, on by default.</h2>
   <p>Self improving code with no brakes is a liability. These are the ones OURO ships. You cannot turn off the first four.</p>
   <h3>Sandbox</h3>
-  <p>Every generated strategy runs inside an isolated virtual machine. It gets 64 MB of memory, 50 milliseconds per decision, 2 seconds to load, and nothing else. No network, no file system, no access to your process. The only globals are <code>Math</code>, <code>Number</code> and <code>JSON</code>. Before a strategy even reaches the VM, its source is scanned and rejected if it contains <code>import</code>, <code>require</code>, <code>fetch</code>, <code>process</code>, <code>globalThis</code>, <code>eval</code>, <code>Function</code>, timers, sockets, constructor walks, or an unbounded loop. A model that produces bad code cannot escape this. It just gets rejected.</p><p>Two backends enforce the same limits. <code>isolated-vm</code> is used when it loads. If it does not, each strategy runs in its own worker thread under <code>node:vm</code> with the same memory cap and timeouts, so the guard holds on machines where the native module will not build.</p>
+  <p>Every generated strategy runs inside an isolated virtual machine. It gets 64 MB of memory, 50 milliseconds per decision, 2 seconds to load, and nothing else. No network, no file system, no access to your process. No host object is in scope, only the language's own builtins such as <code>Math</code>, <code>Number</code> and <code>JSON</code>. Before a strategy even reaches the VM, its source is scanned and rejected if it contains <code>import</code>, <code>require</code>, <code>fetch</code>, <code>process</code>, <code>globalThis</code>, <code>eval</code>, <code>Function</code>, timers, sockets, constructor walks, or an unbounded loop. A model that produces bad code cannot escape this. It just gets rejected.</p><p>Two backends enforce the same limits. <code>isolated-vm</code> is used when it loads. If it does not, each strategy runs in its own worker thread under <code>node:vm</code> with the same memory cap and timeouts, so the guard holds on machines where the native module will not build.</p>
   <h3>Holdout</h3>
   <p>The newest slice of episodes is never shown to the Critic or the Generator. They can only learn from the older slice. Then the judge checks their work on the slice they never saw. This is the single most important guard against a loop that convinces itself it is improving.</p>
   <h3>Margin</h3>
@@ -639,7 +640,7 @@ footer{border-top:1px solid var(--rule);padding-block:40px;color:var(--fg3);font
   <p>Set <code>requireApproval: true</code> and a cycle stops at the promotion step. It returns "pending" with the full diagnosis, the candidates and both sets of scores. Nothing changes until you call <code>approve(cycle)</code> or <code>reject(cycle)</code>, from code or from the command line. The default is off for paper trading and on for live money, and the SDK refuses to go live with it off unless you say so explicitly.</p>
   <h3>Rollback</h3>
   <p><code>ouro rollback 7</code> restores the population exactly as it was after cycle 7. Later strategies are marked rolled back, not deleted. History is append only. You can always see what the loop did, and you can always undo it.</p>
-  <div class="note"><b>Honest limit.</b> Replay in v0.1 reuses stored outcomes when a candidate makes the same decision the original made, and counts zero when it does not. It does not re simulate against the raw bars. This is good enough to compare strategies that trade the same setups and is documented as a known simplification. Full re simulation is on the list.</div>
+  <div class="note"><b>Honest limit, fixed in 0.2.0.</b> Replay in 0.1 reused stored outcomes when a candidate made the same decision the original made, and counted zero when it did not. Since 0.2.0 every closed bar is stored and candidates are re-run over the raw bars with the paper fill model. The old behaviour is still available as <code>replay: 'outcome'</code>, and it is the fallback when no bars are stored yet.</div>
 </section>
 
 <section id="d-ci">
@@ -653,7 +654,12 @@ footer{border-top:1px solid var(--rule);padding-block:40px;color:var(--fg3);font
 <section id="d-install">
   <span class="label">08 / Install</span>
   <h2>Ten minutes to a population.</h2>
-<pre><code>npm i @ourointelligence/sdk @ourointelligence/source-hyperliquid
+  <p>npm release coming soon. Until then install from the GitHub release:</p>
+<pre><code>pnpm add https://github.com/ourointelligence/ouro/releases/download/v0.2.0/ourointelligence-sdk-0.2.0.tgz \
+  https://github.com/ourointelligence/ouro/releases/download/v0.2.0/ourointelligence-source-hyperliquid-0.2.0.tgz \
+  https://github.com/ourointelligence/ouro/releases/download/v0.2.0/ourointelligence-executor-paper-0.2.0.tgz
+# (npm works the same way: npm i followed by the three URLs; add the overrides shown in docs/plugins.md)</code></pre>
+<pre><code>npm i @ourointelligence/sdk @ourointelligence/source-hyperliquid   # (coming soon)
 
 # pick one provider and set its key
 export OURO_LLM=anthropic
@@ -662,7 +668,7 @@ export ANTHROPIC_API_KEY=sk-...
 
 cd my-project
 npx ouro run --paper --assets BTC,ETH --tf 15m</code></pre>
-  <p>Node 20 or newer. Keys can also live in a <code>.env</code> file in the project folder. The run command seeds a population, backfills three hundred bars of history so the indicators have something to work with, then subscribes to live candles and starts trading on paper. The first cycle fires once every strategy has forty closed trades. Leave it running and watch <code>ouro takeoff</code> in another terminal.</p>
+  <p>Node 20 or newer. Keys can also live in a <code>.env</code> file in the project folder. The run command needs an <code>ouro.config.ts</code> in the folder. It seeds a population, pulls three hundred bars of history so the indicators have something to work with (and trades through recent history first when <code>backfill</code> is set), then subscribes to live candles and starts trading on paper. The first cycle fires once every strategy has <code>cycleEvery</code> closed trades, fifty by default, or once <code>cycleMaxWait</code> has passed. Leave it running and watch <code>ouro takeoff</code> in another terminal.</p>
 </section>
 
 <section id="d-config">
@@ -704,6 +710,13 @@ export default createLoop({
     <tr><td><code>llm</code></td><td>from env</td><td>Override the adapter chosen by <code>OURO_LLM</code>.</td></tr>
     <tr><td><code>dir</code></td><td><code>.ouro</code></td><td>Where everything is stored.</td></tr>
     <tr><td><code>warmupBars</code></td><td>300</td><td>History pulled before the first live bar so indicators are warm.</td></tr>
+    <tr><td><code>cycleMaxWait</code></td><td>off</td><td>Longest wait between cycles as bar time, for example <code>'6h'</code>. A cycle then fires even if some strategy is short of episodes.</td></tr>
+    <tr><td><code>minTradesPerWindow</code></td><td>3</td><td>A strategy with fewer closed trades than this since the last cycle ranks weakest; it retires with reason <code>inactive</code> when replaced.</td></tr>
+    <tr><td><code>replay</code></td><td><code>'bars'</code></td><td>How trial and validation score strategies. <code>'bars'</code> re-runs decide over the stored bars with the paper fill model; <code>'outcome'</code> is the 0.1 behaviour.</td></tr>
+    <tr><td><code>replayPaper</code></td><td>executor settings</td><td>Fee, slippage and funding used by bar replay when the live executor is not the built in paper one.</td></tr>
+    <tr><td><code>llmPricing</code></td><td>none</td><td><code>{ inputPerMTok, outputPerMTok }</code> in dollars, so every cycle reports what it cost.</td></tr>
+    <tr><td><code>llmRetry</code></td><td>2 retries, 1 s</td><td>Retries with backoff when the model provider fails. After that the cycle is recorded as <code>error</code> with reason <code>llm_error</code> and trading continues.</td></tr>
+    <tr><td><code>seedRetryMs</code></td><td>60000</td><td>How long to wait before trying to seed again when the provider is down at first start.</td></tr>
   </table></div>
 </section>
 
@@ -729,7 +742,7 @@ export function decide(x, p) {
 export const describe = 'Hull 34 cross up with QQE confirm, skips 00-04 UTC, needs 1.5x volume';</code></pre>
   <p>Feature keys are flat strings the primitive packs expose: <code>ta.hull21.crossUp</code>, <code>ta.atr14</code>, <code>ta.rsi14</code>, <code>volume.volRatio</code>, <code>time.hour</code>, <code>time.isWeekend</code> and so on. Each pack's <code>describe()</code> lists every key with a sentence of documentation, and that list is exactly what the Generator is shown. A strategy may only read keys a registered pack produces; anything else is rejected as an unknown feature.</p>
   <p>A decision is <code>null</code> for do nothing, or an object with <code>side</code> (long, short or flat), <code>size</code> as a fraction of equity, and optional <code>stop</code> and <code>tp</code>. Outside trading these map to whatever your executor understands; the support bot example uses long for resolve and short for escalate.</p>
-  <p>You can open any generated file and edit it. The SDK notices the hash changed and treats it as a new strategy with origin "user". It then has to earn its place like everything else.</p>
+  <p>You can open any generated file and read it, and you can hand your own modules to the loop through <code>seed</code>. They enter with origin "user" and then have to earn their place like everything else.</p>
 </section>
 
 <section id="d-cli">
@@ -740,14 +753,14 @@ export const describe = 'Hull 34 cross up with QQE confirm, skips 00-04 UTC, nee
     <tr><th>Command</th><th>What it does</th></tr>
     <tr><td><code>ouro run [--paper|--live] [--assets] [--tf]</code></td><td>Seeds if needed, warms up, backfills, subscribes, trades, cycles automatically. <code>--live</code> refuses to start unless the executor is a plugin and <code>requireApproval</code> is on.</td></tr>
     <tr><td><code>ouro cycle</code></td><td>Runs one cycle now on whatever episodes exist.</td></tr>
-    <tr><td><code>ouro start --every 1h</code></td><td>Cycles on a timer instead of by episode count.</td></tr>
+    <tr><td><code>ouro start --every 1h</code></td><td>Same as run, and also cycles on a timer as well as by episode count.</td></tr>
     <tr><td><code>ouro population</code></td><td>Table of live strategies: id, origin, cycle born, holdout score, CI, description.</td></tr>
     <tr><td><code>ouro history [--json]</code></td><td>Every strategy ever generated and every cycle result.</td></tr>
     <tr><td><code>ouro explain s-0412</code></td><td>A paragraph in plain words: what it does, where it came from, what the Critic said that led to it.</td></tr>
     <tr><td><code>ouro takeoff</code></td><td>The curve as text: cycle, population CI, best CI, velocity, and a ceiling flag.</td></tr>
     <tr><td><code>ouro rollback 7</code></td><td>Restore the population as it was after cycle 7.</td></tr>
     <tr><td><code>ouro approve 8</code> / <code>ouro reject 8</code></td><td>Finish a pending cycle when <code>requireApproval</code> is on.</td></tr>
-        <tr><td><code>ouro export</code></td><td>Write <code>ouro.json</code> with population, history, takeoff and goal, for dashboards or a registry.</td></tr>
+        <tr><td><code>ouro export</code></td><td>Write <code>ouro.json</code> with <code>schemaVersion: 1</code> in canonical key order: goal, cycle, population, history and takeoff, for dashboards, hash chains or a registry. The shape is documented in <code>docs/export-schema.md</code>.</td></tr>
   </table></div>
 </section>
 
@@ -764,6 +777,9 @@ interface Executor {
   name: string;
   place(d: Decision, x: Input): Promise&lt;{ orderId: string }&gt;;
   onClose(cb: (strategyId: string, outcome: Outcome) =&gt; void): void;
+  onOpen?(cb: (strategyId: string, fill: { asset; side; size; price; ts }) =&gt; void): void;
+  onBar?(bar: Bar): void;
+  stop?(): Promise&lt;void&gt; | void;
 }
 interface PrimitivePack {
   name: string;
@@ -772,12 +788,13 @@ interface PrimitivePack {
 }
 interface LLM {
   name: string;
-  complete(req: { system: string; user: string; json: true }): Promise&lt;string&gt;;
+  complete(req: { system: string; user: string; json: true; maxTokens?: number }):
+    Promise&lt;string | { text: string; usage?: { inputTokens: number; outputTokens: number }; model?: string }&gt;;
 }</code></pre>
-  <p>A Source turns anything into a stream of bars. For trading that is candles. For a support bot it is tickets with a timestamp. A <code>Bar</code> is just open, high, low, close, volume and a time, and your primitive pack decides what features to derive from it.</p>
-  <p>An Executor takes a decision and reports back when the episode closes. Two optional hooks make real fills possible: <code>onBar(bar)</code> is called with every new bar before any decision is made on it, which is where you simulate fills, track stops and mark positions, and <code>stop()</code> is called on shutdown so you can flatten. The loop tags every order with the strategy that made it in <code>x.meta.strategyId</code>; put the asset in <code>outcome.raw.asset</code> when you report a close. The paper executor is in the SDK. A live one for a venue is where you put the API calls, the signing, and the position tracking.</p>
+  <p>A Source turns anything into a stream of bars. For trading that is candles. For a support bot it is tickets with a timestamp. A <code>Bar</code> is just open, high, low, close, volume and a time, plus an optional <code>ext</code> map of extra numbers a source can attach (the Hyperliquid source fills funding rate, open interest, premium, mark and oracle with <code>withAssetCtx</code>) and an optional <code>stale</code> flag for a bar that arrived late, which the loop records but does not trade on. Your primitive pack decides what features to derive from all of it.</p>
+  <p>An Executor takes a decision and reports back when the episode closes. Three optional hooks make real fills possible: <code>onBar(bar)</code> is called with every new bar before any decision is made on it, which is where you simulate fills, track stops and mark positions, <code>onOpen(cb)</code> lets you report each fill so the <code>trade:open</code> event carries the real price, and <code>stop()</code> is called on shutdown so you can flatten. The loop tags every order with the strategy that made it in <code>x.meta.strategyId</code>; put the asset in <code>outcome.raw.asset</code> when you report a close. The paper executor is in the SDK. A live one for a venue is where you put the API calls, the signing, and the position tracking.</p>
   <p>A PrimitivePack is how you teach the Generator about your domain. The <code>describe()</code> output is pasted into its prompt, so write those docs the way you would explain the field to a smart colleague who has never seen your data.</p>
-  <p>An LLM adapter is forty lines. Four ship with the SDK, and any server that speaks the OpenAI chat format works through <code>OPENAI_BASE_URL</code> with no code at all. If a provider returns JSON from a system and user prompt, it can be an adapter. Pick the model with <code>OURO_MODEL</code>.</p>
+  <p>An LLM adapter is forty lines. Four ship with the SDK, and any server that speaks the OpenAI chat format works through <code>OPENAI_BASE_URL</code> with no code at all. If a provider returns JSON from a system and user prompt, it can be an adapter. Return <code>{ text, usage, model }</code> instead of a plain string and the loop counts every token; wrap any adapter with <code>wrapLLM</code> to log calls or enforce a budget. Pick the model with <code>OURO_MODEL</code>.</p>
   <p>The full guide with one worked example per interface is in <code>docs/plugins.md</code> in the repo at <a href="https://github.com/ourointelligence/ouro" target="_blank" rel="noopener">github.com/ourointelligence/ouro</a>.</p>
 </section>
 
@@ -798,7 +815,7 @@ interface LLM {
     <li>Set <code>maxDrawdownPct</code> and <code>maxPositionPct</code> to numbers you can live with. The loop cannot exceed them.</li>
     <li>Turn <code>requireApproval</code> on. Read each pending cycle's diagnosis and rationale before approving. It takes a minute and it is the whole point.</li>
     <li>Pass <code>--live</code> with a real executor plugin and <code>dispatch: 'ensemble'</code>, so one combined order goes out instead of eight. The CLI will not start live without <code>requireApproval</code> on.</li>
-    <li>Keep <code>ouro rollback</code> in your head. It restores the previous population from the next bar.</li>
+    <li>Keep <code>ouro rollback</code> in your head. It restores the previous population; a running loop picks it up on its next start.</li>
   </ol>
   <div class="note"><b>Nothing here is financial advice.</b> A rising takeoff curve on paper is evidence the loop works, not evidence a strategy will make money tomorrow. Size accordingly.</div>
 </section>
@@ -807,11 +824,11 @@ interface LLM {
   <span class="label">15 / Files on disk</span>
   <h2>Everything is a plain file you can read or commit.</h2>
   <div class="kv">
-    <b>.ouro/episodes.db</b><span>SQLite store of every episode. Falls back to episodes.jsonl if SQLite cannot load.</span>
+    <b>.ouro/episodes.db</b><span>SQLite store of every episode and every closed bar, so candidates can be re-run over the raw bars. Falls back to episodes.jsonl and bars.jsonl if SQLite cannot load.</span>
     <b>.ouro/history.json</b><span>Every strategy record and every cycle result, append only.</span>
     <b>.ouro/population/</b><span>One .ts and one .json per strategy, generated or user supplied.</span>
     <b>.ouro/takeoff.json</b><span>The curve: cycle, population CI, best CI, velocity.</span>
-    <b>ouro.json</b><span>Written by <code>ouro export</code>. Population, history, takeoff and goal in one file for anything downstream.</span>
+    <b>ouro.json</b><span>Written by <code>ouro export</code>. Population, history, takeoff, goal and a <code>schemaVersion</code> in one file with a stable key order, for anything downstream.</span>
   </div>
 </section>
 

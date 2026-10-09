@@ -1,4 +1,4 @@
-import type { LLM } from '../plugins.js';
+import type { LLM, LLMResponse } from '../plugins.js';
 
 export type OllamaOptions = { model?: string; url?: string; fetch?: typeof globalThis.fetch };
 
@@ -28,8 +28,13 @@ export function ollama(opts: OllamaOptions = {}): LLM {
         }),
       });
       if (!res.ok) throw new Error(`ollama: HTTP ${res.status} ${await res.text()}`);
-      const body = (await res.json()) as { message?: { content?: string } };
-      return body.message?.content ?? '';
+      const body = (await res.json()) as { message?: { content?: string }; prompt_eval_count?: number; eval_count?: number; model?: string };
+      const out: LLMResponse = {
+        text: body.message?.content ?? '',
+        usage: { inputTokens: body.prompt_eval_count ?? 0, outputTokens: body.eval_count ?? 0 },
+        model: body.model ?? model,
+      };
+      return out;
     },
   };
 }

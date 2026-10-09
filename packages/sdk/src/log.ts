@@ -1,8 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { Episode } from './types.js';
+import type { Bar, Episode } from './types.js';
 
-/** Append-only store of episodes. SQLite when better-sqlite3 loads, JSONL otherwise. */
+export type BarQuery = { from?: number; to?: number; limit?: number };
+
+/** Append-only store of episodes and closed bars. SQLite when better-sqlite3 loads, JSONL otherwise. */
 export interface EpisodeLog {
   readonly kind: 'sqlite' | 'jsonl';
   readonly file: string;
@@ -18,6 +20,15 @@ export interface EpisodeLog {
   recentSince(strategyId: string, ts: number, n: number): Episode[];
   strategyIds(): string[];
   total(): number;
+  /** Timestamp of the oldest episode in the store, or null when empty. */
+  firstTs(): number | null;
+  /** Store a closed bar (replaces an earlier bar with the same asset, tf and ts). */
+  appendBar(bar: Bar): void;
+  /** Closed bars for one asset and timeframe, oldest-first, optionally bounded by ts and count (newest `limit`). */
+  bars(asset: string, tf: string, q?: BarQuery): Bar[];
+  barCount(asset: string, tf: string): number;
+  /** Flush buffered writes (no-op for the backends here, kept so stop() can call it). */
+  flush(): void;
   close(): void;
 }
 
@@ -40,10 +51,12 @@ class SqliteLog implements EpisodeLog {
     readonly file: string,
   ) {
     db.pragma('journal_mode = WAL');
+    db.pragma('busy_timeout = 5000');
     db.exec(
       'CREATE TABLE IF NOT EXISTS episodes (id TEXT PRIMARY KEY, ts INTEGER NOT NULL, strategyId TEXT NOT NULL, score REAL, json TEXT NOT NULL)',
     );
     db.exec('CREATE INDEX IF NOT EXISTS episodes_strategy_ts ON episodes (strategyId, ts)');
+    db.exec('CREATE TABLE IF NOT EXISTS bars (asset TEXT NOT NULL, tf TEXT NOT NULL, ts INTEGER NOT NULL, json TEXT NOT NULL, PRIMARY KEY (asset, tf, ts))');
     this.stmts = {
       insert: db.prepare('INSERT OR REPLACE INTO episodes (id, ts, strategyId, score, json) VALUES (?, ?, ?, ?, ?)'),
       recent: db.prepare('SELECT json FROM episodes WHERE strategyId = ? ORDER BY ts DESC, rowid DESC LIMIT ?'),
@@ -53,6 +66,11 @@ class SqliteLog implements EpisodeLog {
       countSince: db.prepare('SELECT COUNT(*) AS n FROM episodes WHERE strategyId = ? AND ts > ?'),
       ids: db.prepare('SELECT DISTINCT strategyId AS id FROM episodes'),
       total: db.prepare('SELECT COUNT(*) AS n FROM episodes'),
+      firstTs: db.prepare('SELECT MIN(ts) AS ts FROM episodes'),
+      insertBar: db.prepare('INSERT OR REPLACE INTO bars (asset, tf, ts, json) VALUES (?, ?, ?, ?)'),
+      bars: db.prepare('SELECT json FROM bars WHERE asset = ? AND tf = ? AND ts >= ? AND ts <= ? ORDER BY ts ASC'),
+      barsLimit: db.prepare('SELECT json FROM bars WHERE asset = ? AND tf = ? AND ts >= ? AND ts <= ? ORDER BY ts DESC LIMIT ?'),
+      barCount: db.prepare('SELECT COUNT(*) AS n FROM bars WHERE asset = ? AND tf = ?'),
     };
   }
   append(ep: Episode): void {
@@ -81,6 +99,27 @@ class SqliteLog implements EpisodeLog {
   total(): number {
     return Number((this.stmts.total.get() as { n: number }).n);
   }
+  firstTs(): number | null {
+    const v = (this.stmts.firstTs.get() as { ts: number | null }).ts;
+    return v === null || v === undefined ? null : Number(v);
+  }
+  appendBar(bar: Bar): void {
+    this.stmts.insertBar.run(bar.asset, bar.tf, bar.ts, JSON.stringify(bar));
+  }
+  bars(asset: string, tf: string, q: BarQuery = {}): Bar[] {
+    const from = q.from ?? 0;
+    const to = q.to ?? Number.MAX_SAFE_INTEGER;
+    if (q.limit !== undefined) {
+      return (this.stmts.barsLimit.all(asset, tf, from, to, q.limit) as Array<{ json: string }>).map((r) => JSON.parse(r.json) as Bar).reverse();
+    }
+    return (this.stmts.bars.all(asset, tf, from, to) as Array<{ json: string }>).map((r) => JSON.parse(r.json) as Bar);
+  }
+  barCount(asset: string, tf: string): number {
+    return Number((this.stmts.barCount.get(asset, tf) as { n: number }).n);
+  }
+  flush(): void {
+    // better-sqlite3 writes synchronously
+  }
   close(): void {
     this.db.close();
   }
@@ -90,12 +129,26 @@ class JsonlLog implements EpisodeLog {
   readonly kind = 'jsonl' as const;
   private readonly byStrategy = new Map<string, Episode[]>();
   private readonly seen = new Set<string>();
+  private readonly barSeries = new Map<string, Bar[]>();
+  readonly barsFile: string;
   constructor(readonly file: string) {
+    this.barsFile = file.replace(/episodes\.jsonl$/, 'bars.jsonl');
+    if (this.barsFile === file) this.barsFile = `${file}.bars`;
     if (fs.existsSync(file)) {
       for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
         if (!line.trim()) continue;
         try {
           this.insert(JSON.parse(line) as Episode);
+        } catch {
+          // skip corrupt line
+        }
+      }
+    }
+    if (fs.existsSync(this.barsFile)) {
+      for (const line of fs.readFileSync(this.barsFile, 'utf8').split('\n')) {
+        if (!line.trim()) continue;
+        try {
+          this.insertBar(JSON.parse(line) as Bar);
         } catch {
           // skip corrupt line
         }
@@ -116,6 +169,15 @@ class JsonlLog implements EpisodeLog {
     while (i > 0 && arr[i - 1]!.ts > ep.ts) i--;
     arr.splice(i, 0, ep);
     this.byStrategy.set(ep.strategyId, arr);
+  }
+  private insertBar(bar: Bar) {
+    const k = `${bar.asset}\u0000${bar.tf}`;
+    const arr = this.barSeries.get(k) ?? [];
+    let i = arr.length;
+    while (i > 0 && arr[i - 1]!.ts > bar.ts) i--;
+    if (i > 0 && arr[i - 1]!.ts === bar.ts) arr[i - 1] = bar;
+    else arr.splice(i, 0, bar);
+    this.barSeries.set(k, arr);
   }
   append(ep: Episode): void {
     this.insert(ep);
@@ -144,6 +206,30 @@ class JsonlLog implements EpisodeLog {
   total(): number {
     return this.seen.size;
   }
+  firstTs(): number | null {
+    let min: number | null = null;
+    for (const arr of this.byStrategy.values()) {
+      const first = arr[0];
+      if (first && (min === null || first.ts < min)) min = first.ts;
+    }
+    return min;
+  }
+  appendBar(bar: Bar): void {
+    this.insertBar(bar);
+    fs.appendFileSync(this.barsFile, JSON.stringify(bar) + '\n');
+  }
+  bars(asset: string, tf: string, q: BarQuery = {}): Bar[] {
+    const from = q.from ?? 0;
+    const to = q.to ?? Number.MAX_SAFE_INTEGER;
+    const arr = (this.barSeries.get(`${asset}\u0000${tf}`) ?? []).filter((b) => b.ts >= from && b.ts <= to);
+    return q.limit !== undefined ? arr.slice(Math.max(0, arr.length - q.limit)) : arr;
+  }
+  barCount(asset: string, tf: string): number {
+    return (this.barSeries.get(`${asset}\u0000${tf}`) ?? []).length;
+  }
+  flush(): void {
+    // appendFileSync already flushed
+  }
   close(): void {
     // nothing to release
   }
@@ -171,13 +257,14 @@ export async function openLog(dir: string, opts: LogOptions = {}): Promise<Episo
 
 /** In-memory log for tests and ephemeral runs. */
 export function memoryLog(): EpisodeLog {
-  const tmp = path.join(process.env['TMPDIR'] ?? process.env['TEMP'] ?? '.', `ouro-mem-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}.jsonl`);
+  const tmp = path.join(process.env['TMPDIR'] ?? process.env['TEMP'] ?? '.', `ouro-mem-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}.episodes.jsonl`);
   const log = new JsonlLog(tmp);
   const origClose = log.close.bind(log);
   log.close = () => {
     origClose();
     try {
       fs.rmSync(tmp, { force: true });
+      fs.rmSync(log.barsFile, { force: true });
     } catch {
       // ignore
     }
