@@ -1,0 +1,15 @@
+{
+  "name": "support-bot-example",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "OURO non-trading example: a synthetic support-ticket stream, a text primitive pack and a resolve/escalate decision.",
+  "scripts": {
+    "run": "ouro run --paper --quiet",
+    "population": "ouro population",
+    "takeoff": "ouro takeoff"
+  },
+  "dependencies": {
+    "@ourointelligence/sdk": "workspace:*"
+  }
+}

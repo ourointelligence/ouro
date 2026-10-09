@@ -1,0 +1,80 @@
+{
+  "name": "@ourointelligence/sdk",
+  "version": "0.1.0",
+  "description": "OURO: recursive self-improvement for any goal. Invents, runs, critiques and rewrites its own population of strategies. Superintelligence you can switch off.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "ouro": "./dist/bin.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ourointelligence/ouro.git",
+    "directory": "packages/sdk"
+  },
+  "homepage": "https://ourosi.xyz",
+  "bugs": {
+    "url": "https://github.com/ourointelligence/ouro/issues"
+  },
+  "keywords": [
+    "self-improvement",
+    "agents",
+    "superintelligence",
+    "trading",
+    "sdk",
+    "typescript"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.132.1",
+    "@google/generative-ai": "^0.24.1",
+    "better-sqlite3": "^13.0.3",
+    "commander": "^14.0.1",
+    "openai": "^7.31.0",
+    "typescript": "^5.9.3",
+    "ws": "^8.22.0",
+    "zod": "^4.6.5"
+  },
+  "optionalDependencies": {
+    "isolated-vm": "^6.2.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^22.18.0",
+    "@types/ws": "^8.18.2",
+    "tsup": "^8.5.1",
+    "vitest": "^3.2.7"
+  }
+}

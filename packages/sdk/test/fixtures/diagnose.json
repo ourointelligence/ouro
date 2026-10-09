@@ -1,0 +1,10 @@
+{
+  "patterns": [
+    "s-0001 loses most between 00:00 and 04:00 UTC when volRatio is below 0.6.",
+    "Long entries with rsi14 above 45 lose on average; the oversold edge needs rsi14 under 30.",
+    "s-0002 wins when hull21.crossUp coincides with volRatio above 1.8."
+  ],
+  "summary": "Losses cluster in the quiet overnight hours and on weak RSI readings; wins come from volume-confirmed crosses. Weak strategies should skip 00-04 UTC and tighten their RSI threshold.",
+  "weakIds": ["s-0001"],
+  "strongIds": ["s-0002"]
+}

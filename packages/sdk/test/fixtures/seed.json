@@ -1,0 +1,16 @@
+{
+  "strategies": [
+    {
+      "code": "export const params = { rsiLow: 30, stopAtr: 1.5, size: 0.05 };\nexport const bounds = { rsiLow: { min: 10, max: 50, step: 5 }, stopAtr: { min: 0.5, max: 4, step: 0.5 }, size: { min: 0.01, max: 0.1, step: 0.01 } };\nexport function decide(x: Input, p: typeof params): Decision {\n  const rsi = x.features['ta.rsi14'];\n  const atr = x.features['ta.atr14'];\n  if (typeof rsi !== 'number' || typeof atr !== 'number') return null;\n  if (rsi < p.rsiLow) return { side: 'long', size: p.size, stop: p.stopAtr * atr, tp: 2 * p.stopAtr * atr };\n  if (rsi > 100 - p.rsiLow) return { side: 'flat', size: 0 };\n  return null;\n}\nexport const describe = 'Buy oversold RSI dips with an ATR stop and a 2R target.';",
+      "params": { "rsiLow": 30, "stopAtr": 1.5, "size": 0.05 },
+      "bounds": { "rsiLow": { "min": 10, "max": 50, "step": 5 }, "stopAtr": { "min": 0.5, "max": 4, "step": 0.5 }, "size": { "min": 0.01, "max": 0.1, "step": 0.01 } },
+      "rationale": "Mean reversion after oversold readings has a positive expectancy on 15m crypto bars. The ATR stop keeps drawdown bounded."
+    },
+    {
+      "code": "export const params = { minVolRatio: 1.5, stopAtr: 2, size: 0.05 };\nexport const bounds = { minVolRatio: { min: 1, max: 3, step: 0.1 }, stopAtr: { min: 0.5, max: 4, step: 0.5 }, size: { min: 0.01, max: 0.1, step: 0.01 } };\nexport function decide(x: Input, p: typeof params): Decision {\n  const up = x.features['ta.hull21.crossUp'];\n  const down = x.features['ta.hull21.crossDown'];\n  const vr = x.features['volume.volRatio'];\n  const atr = x.features['ta.atr14'];\n  if (typeof vr !== 'number' || typeof atr !== 'number') return null;\n  if (up === true && vr > p.minVolRatio) return { side: 'long', size: p.size, stop: p.stopAtr * atr };\n  if (down === true && vr > p.minVolRatio) return { side: 'short', size: p.size, stop: p.stopAtr * atr };\n  return null;\n}\nexport const describe = 'Trade Hull 21 crosses in both directions when volume is above average.';",
+      "params": { "minVolRatio": 1.5, "stopAtr": 2, "size": 0.05 },
+      "bounds": { "minVolRatio": { "min": 1, "max": 3, "step": 0.1 }, "stopAtr": { "min": 0.5, "max": 4, "step": 0.5 }, "size": { "min": 0.01, "max": 0.1, "step": 0.01 } },
+      "rationale": "Hull crosses confirmed by volume filter out chop. Trading both sides captures trends in either direction."
+    }
+  ]
+}

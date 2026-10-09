@@ -1,0 +1,1037 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>OURO</title>
+<meta name="description" content="Recursive self-improvement SDK. Superintelligence you can switch off. Open source, any chain, any model.">
+<link rel="canonical" href="https://ourosi.xyz/">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%20256%20256%22%3E%3Crect%20width%3D%22256%22%20height%3D%22256%22%20rx%3D%2248%22%20fill%3D%22%230b0b0c%22/%3E%3Cpath%20d%3D%22M173.9%2062.5A80%2080%200%201%201%2094.2%2055.5%22%20fill%3D%22none%22%20stroke%3D%22%23ffffff%22%20stroke-width%3D%2222%22%20stroke-linecap%3D%22round%22/%3E%3Ccircle%20cx%3D%22144.6%22%20cy%3D%2249.7%22%20r%3D%2217%22%20fill%3D%22%235b78ff%22/%3E%3C/svg%3E" type="image/svg+xml">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="OURO">
+<meta property="og:title" content="OURO">
+<meta property="og:description" content="Recursive self-improvement SDK. Superintelligence you can switch off.">
+<meta property="og:url" content="https://ourosi.xyz/">
+<meta property="og:image" content="https://ourosi.xyz/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@ourointel">
+<meta name="twitter:title" content="OURO">
+<meta name="twitter:description" content="Recursive self-improvement SDK. Superintelligence you can switch off.">
+<meta name="twitter:image" content="https://ourosi.xyz/og.png">
+<meta name="theme-color" content="#0b0b0c">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@125,700;125,900&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;700&display=swap">
+<style>
+/* Layout: editorial. Full-bleed horizontal rules divide chapters; content sits on a 12-col grid with lots of air.
+   No cards, no boxes. Two tones: cobalt (signal) and flame (alarm). True white / true black themes. */
+:root{
+  --bg:#ffffff; --fg:#0b0b0c; --fg2:#4c4d52; --fg3:#8b8c93; --rule:#0b0b0c; --rule2:#d9d9dc; --soft:#f3f3f4;
+  --cobalt:#1a3cff; --flame:#ff4a1c; --good:#0a9c5d; --bad:#d8102e;
+  --display:'Archivo',ui-sans-serif,system-ui,sans-serif;
+  --body:'Geist',ui-sans-serif,system-ui,sans-serif;
+  --mono:'Geist Mono',ui-monospace,Menlo,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0b0b0c; --fg:#f4f4f5; --fg2:#b3b4ba; --fg3:#72737a; --rule:#f4f4f5; --rule2:#26272b; --soft:#141416;
+  --cobalt:#5b78ff; --flame:#ff6a42; --good:#2ed38a; --bad:#ff4d66; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0b0b0c; --fg:#f4f4f5; --fg2:#b3b4ba; --fg3:#72737a; --rule:#f4f4f5; --rule2:#26272b; --soft:#141416;
+  --cobalt:#5b78ff; --flame:#ff6a42; --good:#2ed38a; --bad:#ff4d66; color-scheme:dark}
+
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+html,body{background:var(--bg);color:var(--fg)}
+body{font-family:var(--body);font-size:17px;line-height:1.6;margin:0;overflow-x:hidden}
+h1,h2,h3{font-family:var(--display);font-stretch:125%;margin:0;line-height:.95;text-wrap:balance;letter-spacing:-.02em;font-weight:900;text-transform:uppercase}
+h2{font-size:clamp(26px,3.5vw,50px);min-width:0;overflow-wrap:anywhere}
+p{margin:0}
+a{color:inherit}
+code{font-family:var(--mono);font-size:.9em}
+.wrap{max-width:1320px;margin:0 auto;padding-inline:24px}
+.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:24px}
+.label{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--fg3)}
+.lede{color:var(--fg2);max-width:58ch;font-size:19px;line-height:1.5}
+.rule{height:1px;background:var(--rule);opacity:.9}
+.rule.thin{background:var(--rule2);opacity:1}
+.accent{color:var(--cobalt)}
+
+/* ambient monochrome field */
+#field{position:absolute;top:0;bottom:0;left:50%;width:100vw;height:100%;transform:translateX(-50%);z-index:-1;pointer-events:none;opacity:.55}
+main{position:relative;z-index:1}
+
+/* nav */
+.nav{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--bg);border-bottom:1px solid var(--rule)}
+.nav .wrap{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-block:16px;flex-wrap:wrap}
+.mark{font-family:var(--display);font-stretch:125%;font-weight:900;letter-spacing:.06em;font-size:20px;text-decoration:none;display:flex;align-items:center;gap:12px}
+.mark .logo{width:30px;height:30px;color:var(--fg)}
+.ext{display:flex;gap:8px;align-items:center}
+.ext a{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border:1px solid var(--rule);color:var(--fg)}
+.ext a:hover{background:var(--fg);color:var(--bg)}
+.ext svg{width:18px;height:18px;fill:currentColor}
+.navlinks{display:flex;gap:28px;flex-wrap:wrap}
+.navlinks a{text-decoration:none;font-size:14px;font-weight:500;color:var(--fg2)}
+.navlinks a:hover{color:var(--fg)}
+.navlinks a.on{color:var(--fg);border-bottom:2px solid var(--cobalt)}
+.tog{font-family:var(--mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;background:none;border:1px solid var(--rule);color:var(--fg);padding:8px 14px;cursor:pointer}
+.tog:focus-visible,.btn:focus-visible,.switch:focus-visible,.copy:focus-visible{outline:2px solid var(--cobalt);outline-offset:3px}
+
+/* hero */
+.hero{position:relative;isolation:isolate;display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);gap:64px;align-items:center;padding-block:56px 64px;min-height:min(calc(100vh - 70px),820px)}
+.hero-copy{min-width:0;display:grid;gap:26px;align-content:center}
+.hero-art{min-width:0;display:grid;justify-items:center;gap:14px}
+.hero h1{font-size:clamp(28px,3.6vw,60px);line-height:.95;margin:0;display:grid;gap:.14em;min-width:0;max-width:100%}
+.hero h1 .h-top{display:block;letter-spacing:-.02em;white-space:nowrap;width:max-content;max-width:none}
+.hero h1 .h-bot{display:block;font-size:.56em;letter-spacing:-.01em;color:var(--fg2);white-space:nowrap}
+.hero h1 em{font-style:normal;color:var(--cobalt);position:relative;white-space:nowrap}
+.hero h1 em::after{content:'';position:absolute;left:0;right:0;bottom:-.12em;height:.09em;background:var(--cobalt);transform-origin:left;animation:drawline 1.2s .5s cubic-bezier(.2,.7,.2,1) both}
+@keyframes drawline{from{transform:scaleX(0)}}
+.scrollcue{font-family:var(--mono);font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--fg3);text-decoration:none}
+.scrollcue:hover{color:var(--fg)}
+
+.hero-row{grid-column:1/13;display:grid;grid-template-columns:7fr 5fr;gap:48px;align-items:center;margin-top:16px}
+.hero h1 .accent{color:var(--cobalt)}
+.hero .sub{font-size:18px;line-height:1.55;color:var(--fg2);max-width:48ch;margin:0}
+.cta{display:flex;gap:16px;margin-top:40px;flex-wrap:wrap}
+.btn{font-family:var(--mono);font-size:14px;letter-spacing:.04em;padding:16px 24px;border:1px solid var(--rule);background:var(--bg);color:var(--fg);text-decoration:none;display:inline-flex;align-items:center;gap:10px;transition:.2s}
+.btn:hover{background:var(--fg);color:var(--bg)}
+.btn.primary{background:var(--cobalt);border-color:var(--cobalt);color:#fff}
+.btn.primary:hover{background:var(--fg);border-color:var(--fg);color:var(--bg)}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);margin-top:6px;border-top:1px solid var(--rule)}
+.kpi{padding:20px 0;border-right:1px solid var(--rule2);padding-right:20px}
+.kpi+.kpi{padding-left:20px}
+.kpi:last-child{border-right:0}
+.kpi .v{font-family:var(--display);font-stretch:125%;font-weight:900;font-size:clamp(24px,2.4vw,36px);line-height:1;margin-top:6px;font-variant-numeric:tabular-nums}
+.kpi .v.good{color:var(--good)}.kpi .v.co{color:var(--cobalt)}
+
+.ouro{position:relative;aspect-ratio:1;width:100%;max-width:470px;margin-inline:auto}
+.ouro svg{width:100%;height:100%;display:block;overflow:visible}
+.ring-track{fill:none;stroke:var(--rule2);stroke-width:1}
+.ring{fill:none;stroke:var(--cobalt);stroke-width:8;stroke-linecap:butt;stroke-dasharray:430 1200;animation:spin 7s linear infinite}
+.ring-head{fill:var(--flame)}
+.ring2{fill:none;stroke:var(--fg);stroke-width:1;stroke-dasharray:2 10;animation:spin 30s linear infinite reverse;opacity:.5}
+@keyframes spin{to{stroke-dashoffset:-1630}}
+.ring-step{font-family:var(--mono);font-size:11px;fill:var(--fg3);letter-spacing:.12em;text-transform:uppercase;transition:.3s}
+.ring-step.on{fill:var(--fg);font-weight:700}
+.center-ci{font-family:var(--display);font-stretch:125%;font-weight:900;font-size:72px;fill:var(--fg);font-variant-numeric:tabular-nums}
+.center-lbl{font-family:var(--mono);font-size:11px;fill:var(--fg3);letter-spacing:.24em;text-transform:uppercase}
+
+/* chapters */
+.chapter{padding-block:96px 112px;border-top:1px solid var(--rule)}
+.ch-top{display:grid;grid-template-columns:repeat(12,1fr);gap:24px 40px;align-items:start;margin-bottom:56px}
+.ch-top .num{grid-column:1/13;font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--cobalt);display:flex;align-items:center;gap:14px}
+.ch-top .num::after{content:'';flex:1;height:1px;background:var(--rule2)}
+.ch-top .title{grid-column:1/8;min-width:0}
+.ch-top .lede{grid-column:8/13;padding-top:10px;min-width:0}
+.reveal{opacity:.001;transform:translateY(18px);transition:opacity .7s cubic-bezier(.2,.7,.2,1),transform .7s cubic-bezier(.2,.7,.2,1)}
+.reveal.in{opacity:1;transform:none}
+.d1{transition-delay:.1s}.d2{transition-delay:.2s}.d3{transition-delay:.3s}
+.next{margin-top:72px;display:flex;align-items:center;gap:16px;font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--fg3)}
+.next .ln{flex:1;height:1px;background:var(--rule2)}
+.next b{color:var(--fg);font-weight:700}
+
+/* loop */
+.loop-grid{display:grid;grid-template-columns:7fr 5fr;gap:48px;align-items:start}
+.term{border:1px solid var(--rule);background:var(--bg)}
+.term .bar{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--rule);font-family:var(--mono);font-size:12px;color:var(--fg2)}
+.term .bar i{width:8px;height:8px;border-radius:50%;background:var(--flame);display:inline-block;margin-right:8px;animation:blink 1.2s steps(1) infinite}
+.term pre{margin:0;padding:22px;font-family:var(--mono);font-size:13.5px;line-height:1.6;height:420px;overflow:hidden;white-space:pre-wrap;word-break:break-word}
+.t-dim{color:var(--fg3)}.t-co{color:var(--cobalt)}.t-fl{color:var(--flame)}.t-good{color:var(--good)}.t-bad{color:var(--bad)}.t-b{font-weight:700}
+.cursor{display:inline-block;width:9px;height:15px;background:var(--fg);vertical-align:-2px;animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.steps{border-top:1px solid var(--rule)}
+.step{display:grid;grid-template-columns:56px 1fr;gap:16px;padding:16px 0;border-bottom:1px solid var(--rule2);transition:.3s;position:relative}
+.step .n{font-family:var(--display);font-stretch:125%;font-weight:900;font-size:26px;color:var(--fg3);line-height:1;transition:.3s}
+.step .t{font-weight:600;font-size:17px}
+.step .d{color:var(--fg2);font-size:15px;margin-top:2px}
+.step.on .n{color:var(--cobalt)}
+.step.on::before{content:'';position:absolute;left:-24px;top:16px;bottom:16px;width:4px;background:var(--cobalt)}
+
+/* takeoff */
+#chart{width:100%;height:340px;display:block;max-width:100%}
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);margin-top:28px;border-top:1px solid var(--rule)}
+.metric{padding:18px 20px 18px 0;border-right:1px solid var(--rule2)}
+.metric+.metric{padding-left:20px}
+.metric:last-child{border-right:0}
+.metric .v{font-family:var(--display);font-stretch:125%;font-weight:900;font-size:34px;line-height:1;margin-top:6px;font-variant-numeric:tabular-nums}
+
+/* population: rows, not cards */
+.pop{border-top:1px solid var(--rule)}
+.row{display:grid;grid-template-columns:110px 120px 1fr 120px 220px;gap:20px;align-items:center;padding:16px 0;border-bottom:1px solid var(--rule2);transition:.5s;min-width:0}
+.row.head{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--fg3);padding:10px 0}
+.row .id{font-family:var(--mono);font-size:14px}
+.row .origin{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase}
+.origin.seed{color:var(--fg3)}.origin.mutate{color:var(--cobalt)}.origin.crossbreed{color:var(--flame)}.origin.fresh{color:var(--good)}
+.row .desc{color:var(--fg2);font-size:15px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .ci{font-family:var(--display);font-stretch:125%;font-weight:900;font-size:24px;font-variant-numeric:tabular-nums;text-align:right}
+.row .bar{height:6px;background:var(--rule2);overflow:hidden}
+.row .bar b{display:block;height:100%;background:var(--cobalt);width:0;transition:width .9s}
+.row.retiring{opacity:.3;text-decoration:line-through;text-decoration-color:var(--bad)}
+.row.born{background:var(--soft);box-shadow:inset 4px 0 0 var(--good);animation:slidein .6s cubic-bezier(.2,1,.3,1)}
+@keyframes slidein{from{transform:translateX(-24px);opacity:0}}
+
+/* primitives: definition list */
+.prims{border-top:1px solid var(--rule)}
+.prim{display:grid;grid-template-columns:2fr 3fr 4fr 3fr;gap:32px;padding:36px 0;border-bottom:1px solid var(--rule2);align-items:center}
+.prim .ico{width:96px;height:96px}
+.prim .ico svg{width:100%;height:100%;overflow:visible}
+.prim .k{font-family:var(--display);font-stretch:125%;font-weight:900;font-size:28px;line-height:1;text-transform:uppercase}
+.prim .th{color:var(--fg2);font-size:17px}
+.prim .sh{font-size:15px}
+.prim .sh .label{display:block;margin-bottom:6px;color:var(--cobalt)}
+.spin-slow{transform-origin:center;animation:rot 12s linear infinite}
+.spin-fast{transform-origin:center;animation:rot 4s linear infinite reverse}
+@keyframes rot{to{transform:rotate(360deg)}}
+.eye{animation:scan 3s ease-in-out infinite}
+@keyframes scan{0%,100%{transform:translateX(-8px)}50%{transform:translateX(8px)}}
+.rewrite{stroke-dasharray:120;animation:dash 2.4s linear infinite}
+@keyframes dash{to{stroke-dashoffset:-240}}
+.sw-anim{animation:swx 2.6s ease-in-out infinite}
+@keyframes swx{0%,40%{transform:translateX(0)}60%,100%{transform:translateX(30px)}}
+
+/* switch */
+.kill{display:grid;grid-template-columns:6fr 6fr;gap:48px;align-items:center}
+.switch-wrap{display:grid;place-items:center;gap:28px;padding:64px 24px;border:1px solid var(--rule);position:relative}
+.switch{position:relative;width:240px;height:110px;border-radius:999px;background:var(--rule2);border:0;cursor:pointer;transition:.4s;padding:0}
+.switch .knob{position:absolute;top:8px;left:8px;width:94px;height:94px;border-radius:50%;background:var(--bg);border:1px solid var(--rule);transition:left .45s cubic-bezier(.6,-.2,.3,1.3);display:grid;place-items:center;font-family:var(--display);font-stretch:125%;font-weight:900;font-size:26px}
+.switch.on{background:var(--cobalt)}
+.switch.on .knob{left:138px}
+.state{font-family:var(--display);font-stretch:125%;font-weight:900;font-size:40px;letter-spacing:.02em;line-height:1}
+.state.on{color:var(--cobalt)}.state.off{color:var(--bad)}
+.state-sub{font-family:var(--mono);font-size:12px;color:var(--fg3);text-align:center;letter-spacing:.04em}
+.guards{margin-top:40px;border-top:1px solid var(--rule)}
+.guard{display:grid;grid-template-columns:48px 1fr;gap:16px;padding:18px 0;border-bottom:1px solid var(--rule2);font-size:16px}
+.guard i{font-family:var(--display);font-stretch:125%;font-weight:900;font-style:normal;font-size:22px;color:var(--flame);line-height:1.2}
+.guard b{display:block;font-weight:600}.guard span{color:var(--fg2);font-size:15px}
+
+/* install */
+.two{display:grid;grid-template-columns:5fr 7fr;gap:32px}
+.code{border:1px solid var(--rule);min-width:0}
+.code .hd{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid var(--rule);font-family:var(--mono);font-size:12px;color:var(--fg2);letter-spacing:.06em}
+.code pre{margin:0;padding:22px;overflow-x:auto;font-family:var(--mono);font-size:13.5px;line-height:1.65}
+.copy{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;background:none;border:1px solid var(--rule);color:var(--fg);padding:5px 10px;cursor:pointer}
+.copy:hover{background:var(--fg);color:var(--bg)}
+.c-k{color:var(--cobalt)}.c-s{color:var(--good)}.c-c{color:var(--fg3)}.c-a{color:var(--flame)}.c-f{font-weight:700}
+.marquee{margin-top:48px;overflow:hidden;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);padding-block:16px}
+.marquee .track{display:flex;gap:0;width:max-content;animation:slide 32s linear infinite;font-family:var(--display);font-stretch:125%;font-weight:700;font-size:22px;text-transform:uppercase;letter-spacing:.02em}
+.marquee .track span::after{content:'·';color:var(--cobalt);margin-inline:22px}
+@keyframes slide{to{transform:translateX(-50%)}}
+
+footer{border-top:1px solid var(--rule);padding-block:40px;color:var(--fg3);font-size:13px;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;font-family:var(--mono)}
+
+@media (max-width:700px){.navlinks a:not([data-view]){display:none}.navlinks{gap:16px}}
+@media (max-width:1000px){
+  .ch-top{grid-template-columns:1fr;gap:16px}
+  .ch-top .num,.ch-top .title,.ch-top .lede{grid-column:auto}
+  .hero-row{grid-template-columns:1fr}
+  .hero{grid-template-columns:1fr;min-height:0;gap:32px;padding-block:40px 48px}
+  .hero-art .ouro{max-width:340px}
+  .loop-grid,.kill,.two{grid-template-columns:1fr}
+  .prim{grid-template-columns:1fr 1fr;gap:20px;padding:28px 0}
+  .prim .ico{width:72px;height:72px}
+  .row{grid-template-columns:90px 1fr 90px;gap:12px}
+  .row .desc,.row .bar{grid-column:1/-1}
+  .row.head .desc,.row.head .bar{display:none}
+  .step.on::before{left:-12px}
+  .chapter{padding-block:64px 72px}
+}
+@media (max-width:560px){
+  .kpis,.metrics{grid-template-columns:1fr}
+  .kpi,.metric{border-right:0;border-bottom:1px solid var(--rule2);padding-left:0!important;padding-right:0}
+  .prim{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation:none!important;transition:none!important}
+  .reveal{opacity:1;transform:none}
+}
+
+/* ===== docs view ===== */
+@media (prefers-color-scheme:dark){}
+#docs h1,#docs h2,#docs h3{font-family:var(--display);font-stretch:125%;font-weight:900;text-transform:uppercase;letter-spacing:-.02em;margin:0;line-height:1;text-wrap:balance;min-width:0;overflow-wrap:anywhere}
+#docs h1{font-size:clamp(32px,4vw,58px);line-height:.95}
+#docs h2{font-size:clamp(22px,2.4vw,34px);margin-top:0}
+#docs h3{font-size:18px;text-transform:none;letter-spacing:0;font-stretch:100%;font-family:var(--body);font-weight:600;margin-top:32px}
+#docs p{margin:0 0 18px}
+#docs a{color:var(--cobalt)}
+#docs code{font-family:var(--mono);font-size:.88em;background:var(--soft);padding:2px 6px}
+#docs pre{background:var(--soft);border:1px solid var(--rule2);padding:20px;overflow-x:auto;font-family:var(--mono);font-size:13.5px;line-height:1.6;margin:0 0 22px}
+#docs pre code{background:none;padding:0;font-size:inherit}
+#docs ul,#docs ol{padding-left:22px;margin:0 0 18px}
+#docs li{margin-bottom:6px}
+#docs li::marker{color:var(--cobalt)}
+#docs table{width:100%;border-collapse:collapse;margin:0 0 24px;font-size:15px}
+#docs th,#docs td{text-align:left;padding:12px 14px 12px 0;border-bottom:1px solid var(--rule2);vertical-align:top}
+#docs th{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--fg3);border-bottom:1px solid var(--rule)}
+#docs td code{white-space:nowrap}
+#docs .tablewrap{overflow-x:auto;margin-bottom:24px}
+#docs .label{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--cobalt)}
+#docs .note{border-left:3px solid var(--flame);padding:12px 18px;background:var(--soft);margin:0 0 22px;font-size:15.5px}
+#docs .note b{color:var(--flame)}
+#docs .wrap{max-width:1320px;margin:0 auto;padding-inline:24px}
+#docs .nav{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--bg);border-bottom:1px solid var(--rule)}
+#docs .nav .wrap{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-block:16px;flex-wrap:wrap}
+#docs .mark{font-family:var(--display);font-stretch:125%;font-weight:900;letter-spacing:.06em;font-size:20px;text-decoration:none;color:var(--fg);display:flex;align-items:center;gap:12px}
+#docs .mark .logo{width:30px;height:30px;color:var(--fg)}
+.ext{display:flex;gap:8px;align-items:center}
+.ext a{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border:1px solid var(--rule);color:var(--fg)}
+.ext a:hover{background:var(--fg);color:var(--bg)}
+.ext svg{width:18px;height:18px;fill:currentColor}
+#docs .navlinks{display:flex;gap:28px;flex-wrap:wrap}
+#docs .navlinks a{text-decoration:none;font-size:14px;font-weight:500;color:var(--fg2)}
+#docs .navlinks a.on{color:var(--fg);border-bottom:2px solid var(--cobalt)}
+#docs .tog{font-family:var(--mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;background:none;border:1px solid var(--rule);color:var(--fg);padding:8px 14px;cursor:pointer}
+#docs .tog:focus-visible{outline:2px solid var(--cobalt);outline-offset:3px}
+#docs .hero{padding-block:64px 48px;border-bottom:1px solid var(--rule)}
+#docs .hero p{color:var(--fg2);font-size:19px;max-width:60ch;margin-top:28px}
+#docs .layout{display:grid;grid-template-columns:260px 1fr;gap:64px;padding-block:48px 120px;align-items:start}
+#docs .side{position:sticky;top:calc(env(safe-area-inset-top,0px) + 80px);font-size:14px}
+#docs .side .label{display:block;margin-bottom:12px}
+#docs .side a{display:block;color:var(--fg2);text-decoration:none;padding:6px 0 6px 14px;border-left:1px solid var(--rule2)}
+#docs .side a:hover{color:var(--fg)}
+#docs .side a.on{color:var(--fg);border-left:2px solid var(--cobalt);font-weight:600}
+#docs .side .grp{margin-top:18px}
+#docs .content{min-width:0;max-width:760px}
+#docs section{padding-block:8px 48px;border-bottom:1px solid var(--rule2);margin-bottom:40px}
+#docs section:last-child{border-bottom:0}
+#docs section .label{display:block;margin-bottom:14px}
+#docs section h2{margin-bottom:22px}
+#docs .kv{display:grid;grid-template-columns:200px 1fr;gap:10px 24px;font-size:15px;margin:0 0 24px}
+#docs .kv b{font-family:var(--mono);font-weight:500;color:var(--fg)}
+#docs .kv span{color:var(--fg2)}
+@media (max-width:900px){#docs .layout{grid-template-columns:1fr;gap:32px}
+#docs .side{position:static;display:flex;flex-wrap:wrap;gap:4px 14px}
+#docs .side .label,#docs .side .grp{display:none}
+#docs .side a{border:1px solid var(--rule2);padding:5px 10px}
+#docs .kv{grid-template-columns:1fr;gap:4px 0}
+#docs .kv span{margin-bottom:10px}}
+#docs{display:block}
+#docs .hero{display:block;padding-block:64px 48px;min-height:0}
+#docs .wrap{max-width:1320px;margin:0 auto;padding-inline:24px}
+#home[hidden],#docs[hidden]{display:none!important}
+</style>
+</head>
+<body>
+
+
+
+<main>
+<div class="nav">
+  <div class="wrap">
+    <a class="mark" href="#top" data-view="home"><svg class="logo" viewBox="0 0 256 256" aria-hidden="true"><path d="M177.3 57.6A86 86 0 1 1 91.7 50.1" fill="none" stroke="currentColor" stroke-width="22" stroke-linecap="round"/><circle cx="145.9" cy="43.9" r="17" fill="var(--cobalt)"/></svg>OURO</a>
+    <div class="navlinks">
+      <a href="#top" data-view="home">Home</a><a href="#loop">Loop</a><a href="#takeoff">Takeoff</a><a href="#population">Population</a><a href="#primitives">SI</a><a href="#switch">Switch</a><a href="#install">Install</a><a href="#docs" data-view="docs">Docs</a>
+    </div>
+    <div class="ext"><a href="https://github.com/ourointelligence/ouro" target="_blank" rel="noopener" aria-label="GitHub"><svg viewBox="0 0 24 24"><path d="M12 .5a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2.2c-3.3.7-4-1.4-4-1.4-.6-1.4-1.4-1.8-1.4-1.8-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1.1 1.9 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-5.9 0-1.3.5-2.4 1.2-3.2-.1-.3-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.7.2 2.9.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.6-5.5 5.9.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0 0 12 .5z"/></svg></a><a href="https://x.com/ourointel" target="_blank" rel="noopener" aria-label="X"><svg viewBox="0 0 24 24"><path d="M18.2 2h3.4l-7.4 8.5L23 22h-6.8l-5.3-7-6.1 7H1.4l7.9-9.1L1 2h7l4.8 6.4L18.2 2zm-1.2 18h1.9L7.1 3.9H5.1L17 20z"/></svg></a><button class="tog" id="theme" aria-label="Toggle light and dark theme"><span id="theme-lbl">dark</span></button></div>
+  </div>
+</div>
+
+<div id="home">
+<div class="wrap" id="top">
+<div class="hero">
+  <canvas id="field" aria-hidden="true"></canvas>
+  <div class="hero-copy">
+    <div class="label reveal in">Recursive self-improvement, as a library</div>
+    <h1 class="reveal in d1"><span class="h-top">Superintelligence</span><span class="h-bot">you can <em>switch off.</em></span></h1>
+    <p class="sub reveal in d2">OURO invents its own strategies for any goal, runs a population of them, judges its own failures and rewrites itself. It gets measurably better with no human in the loop. Any chain, any venue, any model.</p>
+    <div class="cta reveal in d2">
+      <a class="btn primary" href="#install">npm i @ourointelligence/sdk</a>
+      <a class="btn" href="#docs">Read the docs</a>
+      <a class="btn" href="https://github.com/ourointelligence/ouro" target="_blank" rel="noopener">GitHub ↗</a>
+    </div>
+    <div class="kpis reveal in d3">
+      <div class="kpi"><div class="label">Population CI</div><div class="v good" id="s-ci">+0.00</div></div>
+      <div class="kpi"><div class="label">Cycle</div><div class="v co" id="s-cycle">0</div></div>
+      <div class="kpi"><div class="label">Strategies born</div><div class="v" id="s-born">8</div></div>
+    </div>
+  </div>
+  <div class="hero-art reveal in d2">
+    <div class="ouro">
+      <svg viewBox="0 0 400 400" aria-label="The OURO loop ring">
+        <circle class="ring-track" cx="200" cy="200" r="150"/>
+        <circle class="ring2" cx="200" cy="200" r="118"/>
+        <circle class="ring" cx="200" cy="200" r="150" transform="rotate(-90 200 200)"/>
+        <g id="ring-steps"></g>
+        <text class="center-ci" x="200" y="216" text-anchor="middle" id="ring-ci">+0.00</text>
+        <text class="center-lbl" x="200" y="246" text-anchor="middle">population ci</text>
+      </svg>
+    </div>
+    <a class="scrollcue" href="#loop">watch it think ↓</a>
+  </div>
+</div>
+</div>
+
+<!-- 01 -->
+<section class="chapter" id="loop">
+<div class="wrap">
+  <div class="ch-top">
+    <div class="num reveal">01 / The loop</div>
+    <h2 class="title reveal d1">It writes the strategy. Then argues with it.</h2>
+    <p class="lede reveal d2">Every cycle the SDK ranks what's alive, asks a Critic why the weak ones lost, lets a Generator mutate, crossbreed and invent, and promotes only what wins on data it has never seen. This terminal is simulated. The real one prints the same lines.</p>
+  </div>
+  <div class="loop-grid">
+    <div class="term reveal">
+      <div class="bar"><span><i></i>ouro run --paper --assets BTC,ETH --tf 15m</span><span>paper</span></div>
+      <pre id="term"></pre>
+    </div>
+    <div class="steps reveal d2" id="steps">
+      <div class="step" data-i="0"><div class="n">S</div><div><div class="t">Seed</div><div class="d">Generator reads the goal and primitives, writes 8 strategies. Each passes the sandbox first.</div></div></div>
+      <div class="step" data-i="1"><div class="n">1</div><div><div class="t">Collect</div><div class="d">Last N episodes per strategy. Newest 30% is holdout, untouched until validation.</div></div></div>
+      <div class="step" data-i="2"><div class="n">2</div><div><div class="t">Rank</div><div class="d">Score every live strategy on holdout. Bottom quarter marked for retirement.</div></div></div>
+      <div class="step" data-i="3"><div class="n">3</div><div><div class="t">Diagnose</div><div class="d">Critic reads the worst losses and the best wins, writes a 60-word diagnosis.</div></div></div>
+      <div class="step" data-i="4"><div class="n">4</div><div><div class="t">Generate</div><div class="d">Mutate the weak. Crossbreed the strong. Write one fresh strategy from the diagnosis.</div></div></div>
+      <div class="step" data-i="5"><div class="n">5</div><div><div class="t">Trial</div><div class="d">Replay on train. Must beat the population median by the margin.</div></div></div>
+      <div class="step" data-i="6"><div class="n">6</div><div><div class="t">Validate</div><div class="d">Replay on holdout. Wins on train that lose here are curve-fit. Dropped.</div></div></div>
+      <div class="step" data-i="7"><div class="n">7</div><div><div class="t">Promote</div><div class="d">Survivors enter. Retired leave. Population stays at K. History never deleted.</div></div></div>
+    </div>
+  </div>
+  <div class="next reveal"><span>Every promotion moves the curve</span><span class="ln"></span><b>02 Takeoff ↓</b></div>
+</div>
+</section>
+
+<!-- 02 -->
+<section class="chapter" id="takeoff">
+<div class="wrap">
+  <div class="ch-top">
+    <div class="num reveal">02 / Takeoff</div>
+    <h2 class="title reveal d1">The one chart that says if it's getting smarter.</h2>
+    <p class="lede reveal d2">Capability Index is a strategy's holdout score against the seed generation. The population average per cycle is the takeoff curve. When velocity flattens, it has hit the ceiling of its primitives and a human adds packs. That is the only time a human steps in.</p>
+  </div>
+  <div class="reveal">
+    <div class="label" style="margin-bottom:14px">.ouro/takeoff.json · live · <span style="color:var(--cobalt)">■</span> population CI · <span style="color:var(--flame)">■</span> best CI · <span style="color:var(--fg3)">■</span> velocity</div>
+    <canvas id="chart" width="1300" height="340"></canvas>
+    <div class="metrics">
+      <div class="metric"><div class="label">population CI</div><div class="v" id="m-pop" style="color:var(--cobalt)">+0.00</div></div>
+      <div class="metric"><div class="label">best CI</div><div class="v" id="m-best" style="color:var(--flame)">+0.00</div></div>
+      <div class="metric"><div class="label">velocity</div><div class="v" id="m-vel">+0.00</div></div>
+      <div class="metric"><div class="label">ceiling</div><div class="v" id="m-ceil" style="color:var(--good)">clear</div></div>
+    </div>
+  </div>
+  <div class="next reveal"><span>The curve is made of these</span><span class="ln"></span><b>03 Population ↓</b></div>
+</div>
+</section>
+
+<!-- 03 -->
+<section class="chapter" id="population">
+<div class="wrap">
+  <div class="ch-top">
+    <div class="num reveal">03 / Population</div>
+    <h2 class="title reveal d1">Eight alive at once. Nothing is sacred.</h2>
+    <p class="lede reveal d2">Each row is a strategy the SDK wrote. A struck row is being retired this cycle. A green-edged row was just born. Origin says whether it was seeded, mutated from one parent, crossbred from two, or written fresh.</p>
+  </div>
+  <div class="pop reveal" id="pop"></div>
+  <div class="next reveal"><span>What makes this SI, not AI</span><span class="ln"></span><b>04 Superintelligence ↓</b></div>
+</div>
+</section>
+
+<!-- 04 -->
+<section class="chapter" id="primitives">
+<div class="wrap">
+  <div class="ch-top">
+    <div class="num reveal">04 / Superintelligence</div>
+    <h2 class="title reveal d1">Four primitives of SI, shipped as code.</h2>
+    <p class="lede reveal d2">A superintelligence is not a bigger model. It is a system whose capability rises on its own. Today's agents are frozen at deploy time. OURO is the rise, with the brakes bolted on.</p>
+  </div>
+  <div class="prims">
+    <div class="prim reveal"><div class="ico"><svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="26" fill="none" stroke="var(--fg)" stroke-width="1.5" class="spin-slow" stroke-dasharray="40 14"/><circle cx="32" cy="32" r="16" fill="none" stroke="var(--cobalt)" stroke-width="2" class="spin-fast" stroke-dasharray="20 10"/><circle cx="32" cy="32" r="5" fill="var(--flame)"/></svg></div><div class="k">Self-model</div><div class="th">The system holds a readable description of itself.</div><div class="sh"><span class="label">ships as</span>The live population plus every strategy ever generated, with parents and rationale.</div></div>
+    <div class="prim reveal"><div class="ico"><svg viewBox="0 0 64 64"><path d="M4 32q28-30 56 0q-28 30-56 0z" fill="none" stroke="var(--fg)" stroke-width="1.5"/><circle cx="32" cy="32" r="10" fill="var(--cobalt)" class="eye"/><circle cx="32" cy="32" r="4" fill="var(--bg)" class="eye"/></svg></div><div class="k">Self-critique</div><div class="th">The system judges its own output.</div><div class="sh"><span class="label">ships as</span>The Critic: an LLM step that diagnoses the agent's own failures before anything changes.</div></div>
+    <div class="prim reveal"><div class="ico"><svg viewBox="0 0 64 64"><path d="M8 48c10-30 38-30 48 0" fill="none" stroke="var(--cobalt)" stroke-width="2.5" class="rewrite"/><path d="M8 16c10 30 38 30 48 0" fill="none" stroke="var(--fg)" stroke-width="1.5" class="rewrite"/><circle cx="32" cy="32" r="5" fill="var(--flame)"/></svg></div><div class="k">Self-modification</div><div class="th">The system rewrites itself.</div><div class="sh"><span class="label">ships as</span>Seed, mutate, crossbreed, fresh-write. The population changes without a human edit.</div></div>
+    <div class="prim reveal"><div class="ico"><svg viewBox="0 0 64 64"><rect x="4" y="22" width="56" height="20" rx="10" fill="none" stroke="var(--fg)" stroke-width="1.5"/><circle cx="14" cy="32" r="7" fill="var(--cobalt)" class="sw-anim"/></svg></div><div class="k">Corrigibility</div><div class="th">The system can be bounded and switched off.</div><div class="sh"><span class="label">ships as</span>Sandbox, holdout, risk caps, approval switch, one-call rollback.</div></div>
+  </div>
+  <div class="next reveal"><span>The fourth one is a real button</span><span class="ln"></span><b>05 Switch ↓</b></div>
+</div>
+</section>
+
+<!-- 05 -->
+<section class="chapter" id="switch">
+<div class="wrap">
+  <div class="kill">
+    <div>
+      <div class="label reveal" style="color:var(--cobalt)">05 / Corrigibility</div>
+      <h2 class="reveal d1" style="margin-top:20px">The switch is real.<br>Try it.</h2>
+      <p class="lede reveal d2" style="margin-top:24px">Flip it off and every panel on this page halts mid-cycle. In the SDK that is <code>requireApproval: true</code>: a cycle returns pending and nothing is promoted until you say so.</p>
+      <div class="guards">
+        <div class="guard reveal"><i>1</i><div><b>Sandbox</b><span>Generated code runs in an isolated VM. No network, no filesystem, no imports, 50 ms per decision.</span></div></div>
+        <div class="guard reveal d1"><i>2</i><div><b>Holdout</b><span>The newest slice of data is never shown to the Critic or Generator. Only to the judge.</span></div></div>
+        <div class="guard reveal d2"><i>3</i><div><b>Risk caps</b><span>Any candidate that breaches max drawdown or max position is rejected before trial.</span></div></div>
+        <div class="guard reveal d3"><i>4</i><div><b>Rollback</b><span><code>ouro rollback &lt;cycle&gt;</code> restores the population as it was. Nothing is ever lost.</span></div></div>
+      </div>
+    </div>
+    <div class="switch-wrap reveal d1" id="switch-wrap">
+      <div class="state on" id="state-lbl">RUNNING</div>
+      <button class="switch on" id="kill" aria-pressed="true" aria-label="Toggle the loop"><span class="knob">I</span></button>
+      <div class="state-sub" id="state-sub">loop.start() · cycles promote automatically</div>
+    </div>
+  </div>
+  <div class="next reveal"><span>Ten minutes to your first population</span><span class="ln"></span><b>06 Install ↓</b></div>
+</div>
+</section>
+
+<!-- 06 -->
+<section class="chapter" id="install">
+<div class="wrap">
+  <div class="ch-top">
+    <div class="num reveal">06 / Install</div>
+    <h2 class="title reveal d1">A goal, a source, a scorer. No strategy.</h2>
+    <p class="lede reveal d2">Runs on your machine with your own LLM key. No server, no account, no token in the SDK. Sources and executors are plugins, so the same config runs on any venue or chain someone writes 60 lines for.</p>
+  </div>
+  <div class="two">
+    <div class="code reveal">
+      <div class="hd"><span>terminal</span><button class="copy" data-copy="install-code">copy</button></div>
+<pre id="install-code"><span class="c-c"># any LLM, your key, your bill</span>
+<span class="c-f">npm</span> i @ourointelligence/sdk @ourointelligence/source-hyperliquid
+<span class="c-f">export</span> OURO_LLM=anthropic
+<span class="c-f">export</span> ANTHROPIC_API_KEY=sk-...
+
+<span class="c-c"># seeds 8 strategies on paper, starts evolving</span>
+<span class="c-f">npx</span> ouro run --paper --assets BTC,ETH --tf 15m
+<span class="c-f">npx</span> ouro takeoff</pre>
+    </div>
+    <div class="code reveal d1">
+      <div class="hd"><span>ouro.config.ts</span><button class="copy" data-copy="cfg-code">copy</button></div>
+<pre id="cfg-code"><span class="c-k">import</span> { createLoop, primitives } <span class="c-k">from</span> <span class="c-s">'@ourointelligence/sdk'</span>;
+<span class="c-k">import</span> { hyperliquid } <span class="c-k">from</span> <span class="c-s">'@ourointelligence/source-hyperliquid'</span>;
+
+<span class="c-k">export default</span> <span class="c-f">createLoop</span>({
+  goal: <span class="c-s">'Maximise realised PnL after fees on BTC,ETH 15m, max dd 8%'</span>,
+  primitives: [primitives.ta, primitives.volume, primitives.time],
+  source: <span class="c-f">hyperliquid</span>({ assets: [<span class="c-s">'BTC'</span>,<span class="c-s">'ETH'</span>], tf: <span class="c-s">'15m'</span> }),
+  executor: <span class="c-s">'paper'</span>,
+  score: (ep) =&gt; ep.outcome.pnl - ep.outcome.fees - <span class="c-a">0.5</span> * ep.outcome.drawdown,
+  population: <span class="c-a">8</span>, cycleEvery: <span class="c-a">40</span>, holdout: <span class="c-a">0.3</span>, margin: <span class="c-a">0.05</span>,
+  guards: { maxDrawdownPct: <span class="c-a">8</span>, maxPositionPct: <span class="c-a">10</span> },
+});</pre>
+    </div>
+  </div>
+  <div class="marquee reveal" aria-hidden="true"><div class="track" id="marq"></div></div>
+</div>
+</section>
+
+<div class="wrap">
+<footer>
+  <span>OURO · recursive self-improvement SDK · MIT · <a href="https://github.com/ourointelligence/ouro" target="_blank" rel="noopener">github.com/ourointelligence/ouro</a> · <a href="https://x.com/ourointel" target="_blank" rel="noopener">x.com/ourointel</a> · ourosi.xyz</span>
+  <span>Free and tokenless on every chain. Any token is a separate thing.</span>
+</footer>
+</div>
+</div>
+<div id="docs" hidden>
+<div class="wrap">
+<div class="hero">
+  <div class="label">Documentation · v0.1</div>
+  <h1 style="margin-top:20px">Everything OURO does, in plain language.</h1>
+  <p>This page explains what the SDK is, why it counts as superintelligence technology rather than another AI wrapper, how the loop works end to end, what keeps it safe, and how to run it yourself. Read it top to bottom once. After that the sidebar gets you where you need to go.</p>
+</div>
+
+<div class="layout">
+<nav class="side" id="side">
+  <span class="label">Understand</span>
+  <a href="#d-what">What OURO is</a><a href="#d-why-si">Why this is SI</a><a href="#d-concepts">Core concepts</a><a href="#d-loop">The loop, step by step</a><a href="#d-modes">Three modes</a><a href="#d-guards">Guards and the switch</a><a href="#d-ci">Capability Index</a>
+  <div class="grp"><span class="label">Use</span></div>
+  <a href="#d-install">Install</a><a href="#d-config">Configuration</a><a href="#d-strategy">What a strategy looks like</a><a href="#d-cli">Command line</a><a href="#d-plugins">Plugins</a><a href="#d-examples">Examples</a><a href="#d-live">Going live</a>
+  <div class="grp"><span class="label">Context</span></div>
+  <a href="#d-files">Files on disk</a><a href="#d-cost">Cost</a><a href="#d-token">The token</a><a href="#d-faq">Questions</a>
+</nav>
+
+<div class="content">
+
+<section id="d-what">
+  <span class="label">01 / What OURO is</span>
+  <h2>A library that makes an agent better at its job, by itself.</h2>
+  <p>OURO is an open source TypeScript SDK. You give it a goal in one sentence, a source of data, and a way to score results. It writes a set of strategies to chase that goal, runs them, watches how they do, works out why the weak ones lost, and writes new ones. It repeats this on a schedule. Over time the set of strategies gets better, and you can see it getting better on a chart.</p>
+  <p>You never write a strategy yourself. You can, if you want to start from something you already trust, but the default is that the SDK invents its own. That is the part that matters. Most "self improving" tools let a model tune a few numbers inside a plan a human wrote. OURO writes the plan, judges the plan, and replaces the plan.</p>
+  <p>It runs on your machine. There is no server, no account, no hosted anything. You bring your own LLM key from Anthropic, OpenAI, Google, or a local model through Ollama. Your data and your strategies stay in a folder next to your project.</p>
+  <p>It does not care what the goal is. The reference example is a perpetual futures trading agent on BTC and ETH because that is a domain where "better" is a number you can measure. The same loop works for a support bot that should resolve more tickets, a scraper that should break less often, or a pricing engine that should sell faster at margin. Anything with a stream of inputs, a decision, and a score.</p>
+  <p>And it does not care what chain or venue you are on. Market data and order execution are plugins. The repo ships one for Hyperliquid because it has free public candles and needs no key. A plugin for any other exchange, any EVM or Solana chain, or any non trading source is about sixty lines.</p>
+</section>
+
+<section id="d-why-si">
+  <span class="label">02 / Why this is SI</span>
+  <h2>The difference between an AI product and SI technology.</h2>
+  <p>People use "superintelligence" loosely. Underneath the hype there is a specific idea that every serious definition shares: a superintelligence is a system whose capability rises on its own, without a human editing it. The engine of that rise is called recursive self improvement. The system looks at its own failures, changes itself, checks whether the change helped, and keeps the change if it did. Then it does it again, starting from the improved version.</p>
+  <p>Today's AI agents do not have this. They are frozen the moment you deploy them. They only change when a developer opens the code. That is why they feel like tools, not minds.</p>
+  <p>OURO is recursive self improvement at the agent level. Not at the model level, we are not training neural networks, but at the level of what the agent actually does with the model. The strategies are the agent's behaviour, and the strategies rewrite themselves. That is the mechanism, packaged so you can install it.</p>
+  <p>Four properties show up in every account of what a superintelligent system needs. OURO ships each one as code you can read:</p>
+  <div class="tablewrap"><table>
+    <tr><th>Property</th><th>What it means in theory</th><th>What OURO ships</th></tr>
+    <tr><td><b>Self model</b></td><td>The system holds a readable description of itself.</td><td>The live population plus every strategy ever generated, with its parents and the reason it exists. The Critic and Generator read this.</td></tr>
+    <tr><td><b>Self critique</b></td><td>The system judges its own output.</td><td>The Critic. An LLM step that reads the agent's own worst episodes and writes down why they went wrong, before anything is changed.</td></tr>
+    <tr><td><b>Self modification</b></td><td>The system rewrites itself.</td><td>Seed, mutate, crossbreed, fresh write. New strategies enter and old ones leave without a human edit.</td></tr>
+    <tr><td><b>Corrigibility</b></td><td>The system can be bounded and switched off.</td><td>Sandbox, holdout data, risk caps, an approval switch, and one command rollback.</td></tr>
+  </table></div>
+  <p>The fourth one is why the tagline is "superintelligence you can switch off". The thing that makes self improvement scary is that you lose the ability to stop it. OURO is built so that you never do. Every guard is on by default and the switch is a single config flag.</p>
+</section>
+
+<section id="d-concepts">
+  <span class="label">03 / Core concepts</span>
+  <h2>The words you will see everywhere.</h2>
+  <div class="kv">
+    <b>Goal</b><span>One sentence that says what "better" means. "Maximise realised PnL after fees on BTC and ETH 15m perps, max drawdown 8%." The Generator reads this when it writes strategies.</span>
+    <b>Primitive</b><span>A building block the SDK may use. An indicator, a data field, a time of day. They come in packs. The built in packs cover technical analysis, volume and time. You can ship your own.</span>
+    <b>Strategy</b><span>A small program the SDK wrote, made of primitives. It takes an input and returns a decision. It has numeric parameters and declared ranges for them. You can open any strategy as a normal file and read it.</span>
+    <b>Population</b><span>The set of strategies alive at once. The default is eight. The SDK keeps several on purpose. One strategy can get lucky. Eight that keep beating each other on new data is evidence.</span>
+    <b>Episode</b><span>One unit of work with a result. One closed trade, one support ticket, one page scrape. Each one records what the strategy saw, what it decided, what happened, and a score.</span>
+    <b>Scorer</b><span>Your function that turns an outcome into a number. Higher is better. This is the only thing the loop optimises, so write it carefully.</span>
+    <b>Critic</b><span>The LLM step that reads the worst episodes and writes a short diagnosis of what went wrong.</span>
+    <b>Generator</b><span>The LLM step that writes new strategies. It can mutate one, crossbreed two, or write one from scratch.</span>
+    <b>Trial</b><span>Replaying a candidate strategy against stored episodes to see how it would have done.</span>
+    <b>Holdout</b><span>The newest slice of episodes, kept hidden from the Critic and Generator. Only used to validate. This is what stops the loop from fooling itself.</span>
+    <b>Promotion</b><span>A candidate that wins on holdout enters the population. The weakest live strategy retires to make room.</span>
+    <b>Capability Index</b><span>How much better a strategy is than the first generation, measured on holdout data. The number everyone watches.</span>
+    <b>Source</b><span>A plugin that supplies inputs. A websocket of candles, an API, a file.</span>
+    <b>Executor</b><span>A plugin that carries out decisions. Paper by default. A venue, a contract, or a webhook when you go live.</span>
+  </div>
+</section>
+
+<section id="d-loop">
+  <span class="label">04 / The loop</span>
+  <h2>One cycle, from the first episode to the next promotion.</h2>
+  <p>A cycle runs every time each live strategy has collected a set number of new episodes, forty by default. Here is what happens inside one, in order.</p>
+  <h3>Seed, once</h3>
+  <p>On the very first start there is no population. The Generator reads your goal and the list of primitives you registered and writes eight strategies. Each one is compiled and run inside the sandbox before it is allowed to trade. If any fails, it is thrown out and another is requested. The seed generation becomes the baseline that every later Capability Index is measured against.</p>
+  <h3>Collect</h3>
+  <p>The loop pulls the most recent episodes for each strategy and splits them by time. The older seventy percent is the training slice. The newest thirty percent is holdout. The split is always by time, never random, because random splits leak the future into the past.</p>
+  <h3>Rank</h3>
+  <p>Every live strategy is replayed on its own holdout slice and scored. The bottom quarter is marked for retirement. Marked does not mean gone. A strategy only retires if something better replaces it, so the population never shrinks.</p>
+  <h3>Diagnose</h3>
+  <p>The Critic receives the ten worst episodes of each weak strategy and the five best of each strong one, summarised as compact rows: time, asset, side, result, how long it held, hour of day, volume ratio, and the three most relevant feature values. It writes back at most five patterns and a summary under sixty words. Something like "losses cluster between 00:00 and 04:00 UTC when volume is below average".</p>
+  <h3>Generate</h3>
+  <p>The Generator produces candidates in three ways. For each weak strategy it writes a mutation, which changes a parameter inside its declared range or swaps one feature. For the two strongest it writes a crossbreed, which takes the entry logic of one and the exit and filter logic of the other. And it writes one fresh strategy from the diagnosis that is structurally unlike anything alive. Every candidate goes through the sandbox and the guards before it is allowed anywhere near the data.</p>
+  <h3>Trial</h3>
+  <p>Candidates are replayed on the training slice. A candidate must beat the median training score of the live population by a margin, five percent by default. Anything that only ties is dropped.</p>
+  <h3>Validate</h3>
+  <p>Survivors are replayed on the holdout slice, which no LLM step has seen. A candidate that won on training and loses on holdout is curve fit. It learned the past instead of the pattern. It is rejected with the reason "holdout" and that rejection is written to history so you can see how often it happens.</p>
+  <h3>Promote</h3>
+  <p>Each survivor replaces the weakest remaining marked strategy. The population stays at eight. The new strategy's code, parameters, parents and rationale go into history along with the scores from both trials. The Capability Index is recomputed for every live strategy and the takeoff file is updated.</p>
+  <p>If nothing survives, the cycle records "no change" and the population is untouched. That is a normal and common outcome. The loop is allowed to find nothing. What it is not allowed to do is promote something that only looked good on data it had already seen.</p>
+</section>
+
+<section id="d-modes">
+  <span class="label">05 / Three modes</span>
+  <h2>Let it run free, or narrow it where money says you must.</h2>
+  <h3>Generate mode, the default</h3>
+  <p>You pass a goal, primitives, a source and a scorer. Nothing else. The SDK invents everything. The only limits are the guards. This is the mode the SDK is built for, and the one you should start with on paper, because it finds things you would not have thought to try.</p>
+  <h3>Seeded mode</h3>
+  <p>Pass <code>seed: ['./my-strategy.ts']</code> with one or more files that follow the strategy contract. They become the first generation instead of eight invented ones. Useful when you already have something that works and want the loop to improve it rather than start over. The SDK treats your file like any other strategy. It can be mutated, crossbred and retired.</p>
+  <h3>Constrained mode</h3>
+  <p>Three optional knobs, each independent, each per key:</p>
+  <ul>
+    <li><code>allow</code> restricts which feature keys the Generator may use. If you only want entries built from a handful of indicators, list them.</li>
+    <li><code>bounds</code> caps the range of a parameter. The Generator declares its own bounds for every parameter it invents; yours override them.</li>
+    <li><code>freeze</code> names keys that may never change. Timeframe is the usual one.</li>
+  </ul>
+  <p>Use these only where safety or capital says you must. Every constraint removes a place the loop could have found an improvement.</p>
+</section>
+
+<section id="d-guards">
+  <span class="label">06 / Guards and the switch</span>
+  <h2>Every brake, on by default.</h2>
+  <p>Self improving code with no brakes is a liability. These are the ones OURO ships. You cannot turn off the first four.</p>
+  <h3>Sandbox</h3>
+  <p>Every generated strategy runs inside an isolated virtual machine. It gets 64 MB of memory, 50 milliseconds per decision, 2 seconds to load, and nothing else. No network, no file system, no access to your process. The only globals are <code>Math</code>, <code>Number</code> and <code>JSON</code>. Before a strategy even reaches the VM, its source is scanned and rejected if it contains <code>import</code>, <code>require</code>, <code>fetch</code>, <code>process</code>, <code>globalThis</code>, <code>eval</code>, <code>Function</code>, timers, sockets, constructor walks, or an unbounded loop. A model that produces bad code cannot escape this. It just gets rejected.</p><p>Two backends enforce the same limits. <code>isolated-vm</code> is used when it loads. If it does not, each strategy runs in its own worker thread under <code>node:vm</code> with the same memory cap and timeouts, so the guard holds on machines where the native module will not build.</p>
+  <h3>Holdout</h3>
+  <p>The newest slice of episodes is never shown to the Critic or the Generator. They can only learn from the older slice. Then the judge checks their work on the slice they never saw. This is the single most important guard against a loop that convinces itself it is improving.</p>
+  <h3>Margin</h3>
+  <p>A candidate has to beat the population by a set margin on training, and beat the specific strategy it would replace on holdout. Ties and near ties are not promotions.</p>
+  <h3>Risk caps</h3>
+  <p>If replaying a candidate shows a drawdown above <code>maxDrawdownPct</code>, or any position size above <code>maxPositionPct</code>, it is rejected before trial. The loop cannot promote its way into a bigger bet than you allowed.</p><p>Every rejection carries a reason and is kept in history. In the order they are checked: <code>sandbox</code>, <code>bounds</code>, <code>freeze</code>, <code>allow</code>, <code>unknown feature</code>, <code>drawdown</code>, <code>size</code>, then from the cycle itself <code>train margin</code>, <code>holdout</code> and <code>no slot</code>. If most of your candidates die on holdout, the goal or the scorer needs work, not the guards.</p>
+  <h3>The switch</h3>
+  <p>Set <code>requireApproval: true</code> and a cycle stops at the promotion step. It returns "pending" with the full diagnosis, the candidates and both sets of scores. Nothing changes until you call <code>approve(cycle)</code> or <code>reject(cycle)</code>, from code or from the command line. The default is off for paper trading and on for live money, and the SDK refuses to go live with it off unless you say so explicitly.</p>
+  <h3>Rollback</h3>
+  <p><code>ouro rollback 7</code> restores the population exactly as it was after cycle 7. Later strategies are marked rolled back, not deleted. History is append only. You can always see what the loop did, and you can always undo it.</p>
+  <div class="note"><b>Honest limit.</b> Replay in v0.1 reuses stored outcomes when a candidate makes the same decision the original made, and counts zero when it does not. It does not re simulate against the raw bars. This is good enough to compare strategies that trade the same setups and is documented as a known simplification. Full re simulation is on the list.</div>
+</section>
+
+<section id="d-ci">
+  <span class="label">07 / Capability Index</span>
+  <h2>The one number that says whether it worked.</h2>
+  <p>Capability Index, or CI, measures a strategy against the seed generation on data it has not learned from. The score used is the strategy's own holdout score: the mean score over the newest slice of its own recent episodes. The baseline is the seed generation's mean of that same number, stored once at the first cycle that has it and never changed. CI is the gap between the two, divided by the baseline, so +0.20 means twenty percent better than the first generation. A strategy gets a CI once it has at least three of its own holdout episodes; until then it does not count toward the population average.</p><p>Why own episodes and not the pooled replay the promotion step uses? Pooled scores move with whatever the live population happens to be trading, so a ratio against them wobbles even when nothing changed. Own episode scores do not, and the takeoff curve stays readable.</p>
+  <p>Population CI is the average across the eight live strategies. Plotted per cycle it is the takeoff curve. Velocity is how much population CI rose since the last cycle. When velocity stays under one percent for three cycles in a row the SDK reports a ceiling. That means the loop has squeezed what it can from the primitives it has. The fix is a human one: register another pack, loosen a constraint, or widen the goal. Then it climbs again.</p>
+  <p>All of this is written to <code>.ouro/takeoff.json</code> after every cycle and printed by <code>ouro takeoff</code>. It is the file you screenshot, and later the file a public registry can verify.</p>
+</section>
+
+<section id="d-install">
+  <span class="label">08 / Install</span>
+  <h2>Ten minutes to a population.</h2>
+<pre><code>npm i @ourointelligence/sdk @ourointelligence/source-hyperliquid
+
+# pick one provider and set its key
+export OURO_LLM=anthropic
+export ANTHROPIC_API_KEY=sk-...
+# or OURO_LLM=openai / gemini / ollama
+
+cd my-project
+npx ouro run --paper --assets BTC,ETH --tf 15m</code></pre>
+  <p>Node 20 or newer. Keys can also live in a <code>.env</code> file in the project folder. The run command seeds a population, backfills three hundred bars of history so the indicators have something to work with, then subscribes to live candles and starts trading on paper. The first cycle fires once every strategy has forty closed trades. Leave it running and watch <code>ouro takeoff</code> in another terminal.</p>
+</section>
+
+<section id="d-config">
+  <span class="label">09 / Configuration</span>
+  <h2>ouro.config.ts, field by field.</h2>
+<pre><code>import { createLoop, primitives } from '@ourointelligence/sdk';
+import { hyperliquid } from '@ourointelligence/source-hyperliquid';
+
+export default createLoop({
+  goal: 'Maximise realised PnL after fees on BTC,ETH 15m, max drawdown 8%',
+  primitives: [primitives.ta, primitives.volume, primitives.time],
+  source: hyperliquid({ assets: ['BTC','ETH'], tf: '15m' }),
+  executor: 'paper',
+  score: (ep) => ep.outcome.pnl - ep.outcome.fees - 0.5 * ep.outcome.drawdown,
+  assets: ['BTC','ETH'], tf: '15m',
+  population: 8, cycleEvery: 40, holdout: 0.3, margin: 0.05,
+  guards: { maxDrawdownPct: 8, maxPositionPct: 10, requireApproval: false },
+  ensemble: 'weighted',
+});</code></pre>
+  <div class="tablewrap"><table>
+    <tr><th>Field</th><th>Default</th><th>What it does</th></tr>
+    <tr><td><code>goal</code></td><td>required</td><td>One sentence. The Generator reads it verbatim.</td></tr>
+    <tr><td><code>primitives</code></td><td>required</td><td>Packs the Generator may build from. Built in: <code>ta</code>, <code>volume</code>, <code>time</code>. <code>orderbook</code> and <code>onchain</code> ship as interface stubs.</td></tr>
+    <tr><td><code>source</code></td><td>required</td><td>Where inputs come from. Any plugin that implements <code>Source</code>.</td></tr>
+    <tr><td><code>executor</code></td><td><code>'paper'</code></td><td>Where decisions go. Paper fills at next bar open with a fee and slippage model.</td></tr>
+    <tr><td><code>score</code></td><td>required</td><td>Episode to number. Higher is better. The only thing the loop optimises.</td></tr>
+    <tr><td><code>population</code></td><td>8</td><td>How many strategies stay alive.</td></tr>
+    <tr><td><code>cycleEvery</code></td><td>50</td><td>New episodes per strategy before a cycle fires.</td></tr>
+    <tr><td><code>holdout</code></td><td>0.3</td><td>Share of episodes kept hidden for validation.</td></tr>
+    <tr><td><code>margin</code></td><td>0.05</td><td>How much a candidate must beat the population median by.</td></tr>
+    <tr><td><code>guards</code></td><td>see text</td><td><code>maxDrawdownPct</code>, <code>maxPositionPct</code>, <code>requireApproval</code>, <code>maxProposalsPerCycle</code>.</td></tr>
+    <tr><td><code>seed</code></td><td>none</td><td>Paths to your own strategies to use as the first generation.</td></tr>
+    <tr><td><code>allow</code>, <code>bounds</code>, <code>freeze</code></td><td>none</td><td>Constrained mode knobs. See section 05.</td></tr>
+    <tr><td><code>ensemble</code></td><td><code>'weighted'</code></td><td>How eight decisions become one order. Weighted sums each side by CI plus one and acts if a side holds more than 55 percent. <code>'majority'</code> or <code>'none'</code> also available.</td></tr>
+    <tr><td><code>dispatch</code></td><td><code>'per-strategy'</code></td><td>One order per strategy decision, or <code>'ensemble'</code> for a single order carrying the combined decision. Use ensemble when going live.</td></tr>
+    <tr><td><code>backfill</code></td><td>0</td><td>Bars of recent history to trade through on paper before subscribing live, so the first cycles happen in minutes instead of days.</td></tr>
+    <tr><td><code>autoCycle</code></td><td>true</td><td>Fire a cycle automatically when every live strategy has <code>cycleEvery</code> new episodes. Turn off to cycle only on a timer or by hand.</td></tr>
+    <tr><td><code>retireShare</code></td><td>0.25</td><td>Share of the population marked weak each cycle, at least one.</td></tr>
+    <tr><td><code>llm</code></td><td>from env</td><td>Override the adapter chosen by <code>OURO_LLM</code>.</td></tr>
+    <tr><td><code>dir</code></td><td><code>.ouro</code></td><td>Where everything is stored.</td></tr>
+    <tr><td><code>warmupBars</code></td><td>300</td><td>History pulled before the first live bar so indicators are warm.</td></tr>
+  </table></div>
+</section>
+
+<section id="d-strategy">
+  <span class="label">10 / Strategy contract</span>
+  <h2>What the SDK writes, and what you can hand it.</h2>
+  <p>Every strategy, generated or yours, is a TypeScript module with exactly four exports. No imports are allowed. The function must be pure: same input and parameters, same decision, every time. That is what makes replay honest.</p>
+<pre><code>// .ouro/population/s-0412.ts   (crossbreed, cycle 7, parents s-0203 x s-0311)
+export const params = { hullLen: 34, atrStop: 1.8, rr: 2.2, minVolRatio: 1.5 };
+export const bounds = {
+  hullLen:     { min: 9,   max: 55, step: 1 },
+  atrStop:     { min: 1,   max: 3,  step: 0.1 },
+  rr:          { min: 1,   max: 4,  step: 0.1 },
+  minVolRatio: { min: 0.5, max: 3,  step: 0.1 },
+};
+export function decide(x, p) {
+  if (x.features['time.hour'] &gt;= 0 &amp;&amp; x.features['time.hour'] &lt; 4) return null;
+  if (x.features['volume.volRatio'] &lt; p.minVolRatio) return null;
+  if (x.features['ta.hull34.crossUp'] &amp;&amp; x.features['ta.qqe14.value'] &gt; 0)
+    return { side: 'long', size: 0.05, stop: p.atrStop * x.features['ta.atr14'], tp: p.rr };
+  return null;
+}
+export const describe = 'Hull 34 cross up with QQE confirm, skips 00-04 UTC, needs 1.5x volume';</code></pre>
+  <p>Feature keys are flat strings the primitive packs expose: <code>ta.hull21.crossUp</code>, <code>ta.atr14</code>, <code>ta.rsi14</code>, <code>volume.volRatio</code>, <code>time.hour</code>, <code>time.isWeekend</code> and so on. Each pack's <code>describe()</code> lists every key with a sentence of documentation, and that list is exactly what the Generator is shown. A strategy may only read keys a registered pack produces; anything else is rejected as an unknown feature.</p>
+  <p>A decision is <code>null</code> for do nothing, or an object with <code>side</code> (long, short or flat), <code>size</code> as a fraction of equity, and optional <code>stop</code> and <code>tp</code>. Outside trading these map to whatever your executor understands; the support bot example uses long for resolve and short for escalate.</p>
+  <p>You can open any generated file and edit it. The SDK notices the hash changed and treats it as a new strategy with origin "user". It then has to earn its place like everything else.</p>
+</section>
+
+<section id="d-cli">
+  <span class="label">11 / Command line</span>
+  <h2>Everything from the terminal.</h2>
+  <p>The CLI reads <code>ouro.config.ts</code> from the current folder.</p>
+  <div class="tablewrap"><table>
+    <tr><th>Command</th><th>What it does</th></tr>
+    <tr><td><code>ouro run [--paper|--live] [--assets] [--tf]</code></td><td>Seeds if needed, warms up, backfills, subscribes, trades, cycles automatically. <code>--live</code> refuses to start unless the executor is a plugin and <code>requireApproval</code> is on.</td></tr>
+    <tr><td><code>ouro cycle</code></td><td>Runs one cycle now on whatever episodes exist.</td></tr>
+    <tr><td><code>ouro start --every 1h</code></td><td>Cycles on a timer instead of by episode count.</td></tr>
+    <tr><td><code>ouro population</code></td><td>Table of live strategies: id, origin, cycle born, holdout score, CI, description.</td></tr>
+    <tr><td><code>ouro history [--json]</code></td><td>Every strategy ever generated and every cycle result.</td></tr>
+    <tr><td><code>ouro explain s-0412</code></td><td>A paragraph in plain words: what it does, where it came from, what the Critic said that led to it.</td></tr>
+    <tr><td><code>ouro takeoff</code></td><td>The curve as text: cycle, population CI, best CI, velocity, and a ceiling flag.</td></tr>
+    <tr><td><code>ouro rollback 7</code></td><td>Restore the population as it was after cycle 7.</td></tr>
+    <tr><td><code>ouro approve 8</code> / <code>ouro reject 8</code></td><td>Finish a pending cycle when <code>requireApproval</code> is on.</td></tr>
+        <tr><td><code>ouro export</code></td><td>Write <code>ouro.json</code> with population, history, takeoff and goal, for dashboards or a registry.</td></tr>
+  </table></div>
+</section>
+
+<section id="d-plugins">
+  <span class="label">12 / Plugins</span>
+  <h2>Any venue, any chain, any domain, in about sixty lines.</h2>
+  <p>Four interfaces. Implement one, pass it to the loop, done.</p>
+<pre><code>interface Source {
+  name: string;
+  subscribe(o: { assets: string[]; tf: string }): AsyncIterable&lt;Bar&gt;;
+  history(o: { assets: string[]; tf: string; bars: number }): Promise&lt;Bar[]&gt;;
+}
+interface Executor {
+  name: string;
+  place(d: Decision, x: Input): Promise&lt;{ orderId: string }&gt;;
+  onClose(cb: (strategyId: string, outcome: Outcome) =&gt; void): void;
+}
+interface PrimitivePack {
+  name: string;
+  compute(bars: Bar[], i: number): Record&lt;string, number | boolean | null&gt;;
+  describe(): Array&lt;{ key: string; doc: string }&gt;;
+}
+interface LLM {
+  name: string;
+  complete(req: { system: string; user: string; json: true }): Promise&lt;string&gt;;
+}</code></pre>
+  <p>A Source turns anything into a stream of bars. For trading that is candles. For a support bot it is tickets with a timestamp. A <code>Bar</code> is just open, high, low, close, volume and a time, and your primitive pack decides what features to derive from it.</p>
+  <p>An Executor takes a decision and reports back when the episode closes. Two optional hooks make real fills possible: <code>onBar(bar)</code> is called with every new bar before any decision is made on it, which is where you simulate fills, track stops and mark positions, and <code>stop()</code> is called on shutdown so you can flatten. The loop tags every order with the strategy that made it in <code>x.meta.strategyId</code>; put the asset in <code>outcome.raw.asset</code> when you report a close. The paper executor is in the SDK. A live one for a venue is where you put the API calls, the signing, and the position tracking.</p>
+  <p>A PrimitivePack is how you teach the Generator about your domain. The <code>describe()</code> output is pasted into its prompt, so write those docs the way you would explain the field to a smart colleague who has never seen your data.</p>
+  <p>An LLM adapter is forty lines. Four ship with the SDK, and any server that speaks the OpenAI chat format works through <code>OPENAI_BASE_URL</code> with no code at all. If a provider returns JSON from a system and user prompt, it can be an adapter. Pick the model with <code>OURO_MODEL</code>.</p>
+  <p>The full guide with one worked example per interface is in <code>docs/plugins.md</code> in the repo at <a href="https://github.com/ourointelligence/ouro" target="_blank" rel="noopener">github.com/ourointelligence/ouro</a>.</p>
+</section>
+
+<section id="d-examples">
+  <span class="label">13 / Examples</span>
+  <h2>Two in the repo. One is trading, one is not.</h2>
+  <h3>examples/perp</h3>
+  <p>The reference. Goal is realised PnL after fees with a drawdown penalty on BTC and ETH 15 minute perps. No strategy supplied. Source is Hyperliquid public candles, executor is paper, primitives are the three built in packs. It seeds eight, trades through a backfill of recent history so the first cycles land in minutes, then goes live on the websocket and cycles every forty closed trades. The paper executor fills at the next bar's open with 3.5 basis points of fee and 2 of slippage, and reports pnl, fees and drawdown as a percent of equity. The <code>takeoff.json</code> committed next to the example says in its README exactly which run produced it and whether a model or a stand in answered the prompts.</p>
+  <h3>examples/support-bot</h3>
+  <p>About a hundred lines. A synthetic source yields tickets as bars, a tiny text primitive pack exposes length, a sentiment stub and a category, the decision is resolve or escalate, and the scorer rewards resolving without escalation and penalises long holds. It exists to prove the loop is not a trading bot in disguise.</p>
+</section>
+
+<section id="d-live">
+  <span class="label">14 / Going live</span>
+  <h2>Paper first. Then the switch stays on.</h2>
+  <ol>
+    <li>Run on paper until population CI has risen for at least three cycles and stayed up. Read the rejections too. If most candidates die on holdout, the goal or the scorer needs work.</li>
+    <li>Set <code>maxDrawdownPct</code> and <code>maxPositionPct</code> to numbers you can live with. The loop cannot exceed them.</li>
+    <li>Turn <code>requireApproval</code> on. Read each pending cycle's diagnosis and rationale before approving. It takes a minute and it is the whole point.</li>
+    <li>Pass <code>--live</code> with a real executor plugin and <code>dispatch: 'ensemble'</code>, so one combined order goes out instead of eight. The CLI will not start live without <code>requireApproval</code> on.</li>
+    <li>Keep <code>ouro rollback</code> in your head. It restores the previous population from the next bar.</li>
+  </ol>
+  <div class="note"><b>Nothing here is financial advice.</b> A rising takeoff curve on paper is evidence the loop works, not evidence a strategy will make money tomorrow. Size accordingly.</div>
+</section>
+
+<section id="d-files">
+  <span class="label">15 / Files on disk</span>
+  <h2>Everything is a plain file you can read or commit.</h2>
+  <div class="kv">
+    <b>.ouro/episodes.db</b><span>SQLite store of every episode. Falls back to episodes.jsonl if SQLite cannot load.</span>
+    <b>.ouro/history.json</b><span>Every strategy record and every cycle result, append only.</span>
+    <b>.ouro/population/</b><span>One .ts and one .json per strategy, generated or user supplied.</span>
+    <b>.ouro/takeoff.json</b><span>The curve: cycle, population CI, best CI, velocity.</span>
+    <b>ouro.json</b><span>Written by <code>ouro export</code>. Population, history, takeoff and goal in one file for anything downstream.</span>
+  </div>
+</section>
+
+<section id="d-cost">
+  <span class="label">16 / Cost</span>
+  <h2>Cents per cycle, zero per month.</h2>
+  <p>Episodes are summarised before they reach any prompt, so a full cycle, diagnosis plus up to six generated candidates, stays under about four thousand tokens of input. On a mid tier model that is a few cents. The SDK itself is free, open source under MIT, and runs on your hardware. There is nothing to subscribe to.</p>
+  <p>The only recurring cost is your own LLM key, and you control the cadence. Forty episodes per cycle on a fifteen minute chart is a handful of cycles a day.</p>
+</section>
+
+<section id="d-token">
+  <span class="label">17 / The token</span>
+  <h2>The SDK has no token. Say that plainly.</h2>
+  <p>OURO the library is free, tokenless, and works on every chain or no chain. Nothing in it checks a balance, gates a feature, or pays a fee. If a token exists around the project, it is a separate community asset tied to the superintelligence thesis, not a key to the product.</p>
+  <p>Things a token could touch later, all optional and all chain agnostic: a public Capability Registry where agents publish their takeoff curves so anyone can verify a track record, fees for hosted loops if those ever exist, and votes on which primitive packs enter the public library. None of that is in v0.1 and the SDK will keep working without it.</p>
+</section>
+
+<section id="d-faq">
+  <span class="label">18 / Questions</span>
+  <h2>The ones that come up.</h2>
+  <h3>Does it train a model?</h3>
+  <p>No. It uses a model you already have access to, through its normal API, to write and critique code. The thing that improves is the agent's behaviour, not the weights.</p>
+  <h3>Can it invent a strategy that loses everything?</h3>
+  <p>It can invent one. It cannot promote one. Risk caps reject anything whose replay breaches your drawdown or position limits, and the sandbox means the code cannot reach your money directly. The executor is the only thing that touches a venue, and you wrote or chose it.</p>
+  <h3>Why eight strategies and not one?</h3>
+  <p>One strategy that improves might be lucky. Eight that keep replacing each other on data none of them has seen is a pattern. Crossbreeding also needs parents.</p>
+  <h3>Why does it reject so much?</h3>
+  <p>Because most ideas do not survive new data. A healthy run rejects more than it promotes. If it promoted everything that looked good on training, it would be a curve fitting machine.</p>
+  <h3>Will it work for my non trading problem?</h3>
+  <p>If you can describe the goal in a sentence, turn your inputs into a stream, and score an outcome with a number, yes. Write a source and a primitive pack and the rest is the same loop.</p>
+  <h3>Is it chain specific?</h3>
+  <p>No. The SDK never talks to a chain. Sources and executors do, and those are plugins. Hyperliquid is the shipped example because it is free and keyless, not because anything depends on it.</p>
+  <h3>What happens when it stops improving?</h3>
+  <p>It tells you. Velocity under one percent for three cycles raises a ceiling flag. Add a primitive pack, loosen a constraint, or widen the goal, and it climbs again.</p>
+</section>
+
+</div>
+</div>
+</div>
+
+</div>
+</main>
+
+<script>
+(function(){
+  var rm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var root=document.documentElement;
+  function css(n){return getComputedStyle(root).getPropertyValue(n).trim()}
+  function isDark(){var t=root.getAttribute('data-theme'); if(t) return t==='dark'; return window.matchMedia('(prefers-color-scheme: dark)').matches}
+
+  /* fit the hero headline to its column, whatever font loads */
+  (function(){var h=document.querySelector('.hero h1'),top=h&&h.querySelector('.h-top'),col=document.querySelector('.hero-copy');if(!h||!top||!col)return;
+    function fit(){h.style.fontSize='';var avail=col.clientWidth,w=top.scrollWidth;if(w>avail){var cur=parseFloat(getComputedStyle(h).fontSize);h.style.fontSize=Math.max(22,Math.floor(cur*avail/w*0.98))+'px'}}
+    fit();addEventListener('resize',fit);if(document.fonts&&document.fonts.ready)document.fonts.ready.then(fit);setTimeout(fit,600);setTimeout(fit,1800)})();
+  /* theme */
+  var tog=document.getElementById('theme'), tlbl=document.getElementById('theme-lbl');
+  try{var saved=localStorage.getItem('ouro-theme'); if(saved) root.setAttribute('data-theme',saved);}catch(e){}
+  function syncTheme(){ tlbl.textContent = isDark() ? 'light' : 'dark'; }
+  syncTheme();
+  tog.addEventListener('click',function(){var next=isDark()?'light':'dark'; root.setAttribute('data-theme',next); try{localStorage.setItem('ouro-theme',next)}catch(e){} syncTheme(); drawChart();});
+
+  /* hero-only ambient field: 30 fps, normal resolution, paused when the hero is off screen or the tab is hidden */
+  var fc=document.getElementById('field'), fx=fc.getContext('2d'), pts=[], mouse={x:-1e4,y:-1e4}, fw=0, fh=0, fieldOn=true, lastF=0;
+  function resize(){fw=fc.clientWidth; fh=fc.clientHeight; fc.width=fw; fc.height=fh;}
+  resize(); addEventListener('resize',resize);
+  fc.parentElement.addEventListener('pointermove',function(e){var r=fc.getBoundingClientRect();mouse.x=e.clientX-r.left;mouse.y=e.clientY-r.top});
+  for(var i=0;i<38;i++) pts.push({x:Math.random()*fw,y:Math.random()*fh,vx:(Math.random()-.5)*.5,vy:(Math.random()-.5)*.5});
+  var fRaf=0;function fKick(){if(!fRaf)fRaf=requestAnimationFrame(field)}
+  try{new IntersectionObserver(function(es){fieldOn=es[0].isIntersecting;if(fieldOn)fKick()}).observe(fc)}catch(e){}
+  document.addEventListener('visibilitychange',function(){if(!document.hidden&&fieldOn)fKick()});
+  function field(now){
+    fRaf=0; if(!fieldOn||document.hidden)return;
+    if(now&&now-lastF<33){fKick();return} lastF=now||0;
+    fx.clearRect(0,0,fw,fh); var c = isDark() ? '244,244,245' : '11,11,12';
+    fx.fillStyle='rgba('+c+',.35)';
+    for(var i=0;i<pts.length;i++){var p=pts[i]; p.x+=p.vx; p.y+=p.vy; if(p.x<0||p.x>fw)p.vx*=-1; if(p.y<0||p.y>fh)p.vy*=-1;
+      var dx=mouse.x-p.x,dy=mouse.y-p.y,d=dx*dx+dy*dy; if(d<25600&&d>1){d=Math.sqrt(d);p.x-=dx/d*.9;p.y-=dy/d*.9}
+      fx.fillRect(p.x-1,p.y-1,2,2);}
+    fx.lineWidth=1; fx.strokeStyle='rgba('+c+',.07)'; fx.beginPath();
+    for(var a=0;a<pts.length;a++)for(var b=a+1;b<pts.length;b++){var q=pts[a],u=pts[b],ex=q.x-u.x,ey=q.y-u.y; if(ex*ex+ey*ey<19600){fx.moveTo(q.x,q.y); fx.lineTo(u.x,u.y);}}
+    fx.stroke();
+    if(!rm) fKick();
+  }
+  fKick();
+
+  /* reveal */
+  var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}})},{threshold:.12});
+  document.querySelectorAll('.reveal').forEach(function(el){io.observe(el)});
+
+  /* marquee */
+  var chips=['Hyperliquid','Binance','dYdX','Monad','Solana','Base','Arbitrum','Ethereum','Support tickets','Scrapers','Pricing engines','Market makers','Anthropic','OpenAI','Gemini','Ollama','Your 60-line plugin'];
+  var marq=document.getElementById('marq'),html=''; for(var r=0;r<2;r++) chips.forEach(function(c){html+='<span>'+c+'</span>'}); marq.innerHTML=html;
+
+  /* engine */
+  var running=true,cycle=0,born=8,popCI=0,bestCI=0,nextId=9,hist=[{c:0,p:0,b:0,v:0}];
+  var descs=['EMA 20/50 cross, ATR stop 2x','RSI 14 pullback in trend, fixed RR 2','Breakout above 20-bar high, vol filter','Hull 21 cross up, QQE confirm','ADX > 25 trend ride, trailing ATR','BB width squeeze then breakout','Mean revert to EMA 200, time stop','Funding-window fade, short only'];
+  var learned=['skips 00-04 UTC','volRatio > 1.5 only','ATR stop 1.8x','no weekends','RR raised to 2.4','session filter 08-16','adx gate 30','hull 34 swap'];
+  function pad(n){return String(n).padStart(4,'0')}
+  var pop=descs.map(function(d,i){return{id:'s-'+pad(i+1),origin:'seed',born:0,ci:0,desc:d}});
+  function fmt(v){return(v>=0?'+':'')+v.toFixed(2)}
+  function esc(s){return s.replace(/</g,'&lt;')}
+
+  var stepNames=['seed','collect','rank','diagnose','generate','trial','validate','promote'], g=document.getElementById('ring-steps'), NS='http://www.w3.org/2000/svg';
+  stepNames.forEach(function(n,i){var a=(-90+i*45)*Math.PI/180,r=182; var t=document.createElementNS(NS,'text'); t.setAttribute('x',200+Math.cos(a)*r); t.setAttribute('y',200+Math.sin(a)*r+4); t.setAttribute('text-anchor','middle'); t.setAttribute('class','ring-step'); t.textContent=n; t.id='rs'+i;
+    var c=document.createElementNS(NS,'circle'); c.setAttribute('cx',200+Math.cos(a)*150); c.setAttribute('cy',200+Math.sin(a)*150); c.setAttribute('r',4); c.setAttribute('fill','var(--rule2)'); c.id='rc'+i; g.appendChild(c); g.appendChild(t);});
+  function setStep(i){for(var k=0;k<8;k++){var on=k===i; document.getElementById('rs'+k).classList.toggle('on',on); var c=document.getElementById('rc'+k); c.setAttribute('fill',on?'var(--flame)':'var(--rule2)'); c.setAttribute('r',on?8:4); var s=document.querySelector('.step[data-i="'+k+'"]'); if(s)s.classList.toggle('on',on);}}
+
+  var term=document.getElementById('term'),lines=[];
+  function tline(h){lines.push(h); if(lines.length>22)lines.shift(); term.innerHTML=lines.join('\n')+'\n<span class="cursor"></span>';}
+
+  var popEl=document.getElementById('pop');
+  function renderPop(retireId,bornId){
+    popEl.innerHTML='<div class="row head"><span>id</span><span>origin</span><span class="desc">what it does</span><span style="text-align:right">ci</span><span class="bar" style="background:none"></span></div>';
+    pop.forEach(function(s){var d=document.createElement('div'); d.className='row'+(s.id===retireId?' retiring':'')+(s.id===bornId?' born':''); var w=Math.max(4,Math.min(100,20+s.ci*180));
+      d.innerHTML='<span class="id">'+s.id+'</span><span class="origin '+s.origin+'">'+s.origin+' · c'+s.born+'</span><span class="desc">'+esc(s.desc)+'</span><span class="ci" style="color:'+(s.ci>0.001?'var(--good)':s.ci<-0.001?'var(--bad)':'var(--fg3)')+'">'+fmt(s.ci)+'</span><span class="bar"><b style="width:'+w+'%"></b></span>';
+      popEl.appendChild(d);});
+  }
+  renderPop();
+
+  var cv=document.getElementById('chart'),ctx=cv.getContext('2d');
+  function drawChart(){
+    var W=cv.width,H=cv.height,L=58,R=20,T=24,B=32; ctx.clearRect(0,0,W,H);
+    var n=Math.max(hist.length,12),maxY=Math.max(0.3,bestCI*1.15);
+    var xs=function(i){return L+(W-L-R)*(i/(n-1))},ys=function(v){return T+(H-T-B)*(1-v/maxY)};
+    var fg3=css('--fg3'),rule=css('--rule2'),co=css('--cobalt'),fl=css('--flame'),fg=css('--fg');
+    ctx.strokeStyle=rule; ctx.lineWidth=1; ctx.font='11px Geist Mono, monospace'; ctx.fillStyle=fg3;
+    for(var k=0;k<=4;k++){var v=maxY*k/4,y=ys(v); ctx.beginPath(); ctx.moveTo(L,y); ctx.lineTo(W-R,y); ctx.stroke(); ctx.fillText('+'+v.toFixed(2),8,y+4);}
+    for(var i=0;i<n;i+=Math.ceil(n/12)) ctx.fillText('c'+i,xs(i)-6,H-10);
+    hist.forEach(function(h,i){if(!i)return; ctx.fillStyle=fg3; ctx.globalAlpha=.3; ctx.fillRect(xs(i)-5,ys(Math.max(0,h.v)),10,ys(0)-ys(Math.max(0,h.v))); ctx.globalAlpha=1;});
+    function path(key){ctx.beginPath(); hist.forEach(function(h,i){var x=xs(i),y=ys(h[key]); i?ctx.lineTo(x,y):ctx.moveTo(x,y)});}
+    path('p'); ctx.lineTo(xs(hist.length-1),ys(0)); ctx.lineTo(xs(0),ys(0)); ctx.closePath(); ctx.globalAlpha=.1; ctx.fillStyle=co; ctx.fill(); ctx.globalAlpha=1;
+    path('b'); ctx.strokeStyle=fl; ctx.lineWidth=2; ctx.setLineDash([4,6]); ctx.stroke(); ctx.setLineDash([]);
+    path('p'); ctx.strokeStyle=co; ctx.lineWidth=3; ctx.lineJoin='round'; ctx.stroke();
+    var last=hist[hist.length-1]; ctx.fillStyle=co; ctx.beginPath(); ctx.arc(xs(hist.length-1),ys(last.p),6,0,6.283); ctx.fill();
+    ctx.fillStyle=fg; ctx.font='bold 13px Geist Mono, monospace'; ctx.fillText(fmt(last.p),xs(hist.length-1)-18,ys(last.p)-14);
+  }
+  drawChart();
+
+  function syncStats(){var last=hist[hist.length-1];
+    ['s-ci','ring-ci','m-pop'].forEach(function(id){document.getElementById(id).textContent=fmt(popCI)});
+    document.getElementById('s-cycle').textContent=cycle; document.getElementById('s-born').textContent=born;
+    document.getElementById('m-best').textContent=fmt(bestCI); document.getElementById('m-vel').textContent=fmt(last.v);
+    var flat=hist.length>4&&hist.slice(-3).every(function(h){return h.v<0.01}); var ce=document.getElementById('m-ceil'); ce.textContent=flat?'hit':'clear'; ce.style.color=flat?'var(--flame)':'var(--good)';}
+
+  var queue=[],qTimer=null,qStart=0,qPaused=0,qIndex=0,pendingCycle=false;
+  function at(ms,fn){queue.push({t:ms,fn:fn})}
+  function runCycle(){
+    queue=[]; var t=0;
+    var step=function(ms,i,h){t+=ms;(function(i,h){at(t,function(){setStep(i);if(h)tline(h)})})(i,h)};
+    var say=function(ms,h){t+=ms;(function(h){at(t,function(){tline(h)})})(h)};
+    if(cycle===0){
+      step(200,0,'<span class="t-dim">[ouro]</span> <span class="t-b">goal</span> maximise realised PnL after fees on BTC,ETH 15m · max dd 8%');
+      say(500,'<span class="t-dim">[seed]</span> generating 8 strategies from ta+volume+time …');
+      for(var i=0;i<8;i++)(function(i){say(200,'<span class="t-dim">[seed]</span> <span class="t-co">'+pop[i].id+'</span> sandbox ok · <span class="t-dim">'+esc(pop[i].desc)+'</span>')})(i);
+      say(600,'<span class="t-good">✓ population seeded · 8 live · CI baseline stored after cycle 1</span>'); say(900,'');
+    }
+    var sorted=pop.slice().sort(function(a,b){return a.ci-b.ci}),weak=sorted[0],strong=[sorted[7],sorted[6]],nc=cycle+1;
+    step(300,1,'<span class="t-dim">[c'+nc+']</span> collect · 40 episodes × 8 · holdout = newest 30%');
+    step(900,2,'<span class="t-dim">[c'+nc+']</span> rank on holdout · weakest <span class="t-bad">'+weak.id+'</span> ('+fmt(weak.ci)+') · strongest <span class="t-good">'+strong[0].id+'</span> ('+fmt(strong[0].ci)+')');
+    var diag=['losses cluster 00-04 UTC on low volRatio','exits on noise; stops inside 1 ATR','weak entries after ADX < 20','weekend fills carry 3x slippage','best wins follow vol expansion'][nc%5];
+    step(1100,3,'<span class="t-dim">[c'+nc+']</span> <span class="t-co">critic</span> ▸ "'+diag+'"');
+    var fresh={id:'s-'+pad(nextId++),origin:['mutate','crossbreed','fresh'][nc%3],born:nc,ci:0,desc:'',parents:[]};
+    if(fresh.origin==='mutate'){fresh.desc=weak.desc.split(',')[0]+', '+learned[nc%8];fresh.parents=[weak.id]}
+    else if(fresh.origin==='crossbreed'){fresh.desc=strong[0].desc.split(',')[0]+' + '+(strong[1].desc.split(',')[1]||strong[1].desc).trim();fresh.parents=[strong[0].id,strong[1].id]}
+    else{fresh.desc=['Vol-expansion entry, '+learned[nc%8],'Open-range break, session 08-16','Liquidity sweep reversal, 1.5 ATR'][nc%3]}
+    step(1000,4,'<span class="t-dim">[c'+nc+']</span> generate · <span class="t-fl">'+fresh.origin+'</span> → '+fresh.id+(fresh.parents.length?' <span class="t-dim">← '+fresh.parents.join(' × ')+'</span>':'')+' · sandbox ok');
+    var tg=0.06+Math.random()*0.14;
+    step(900,5,'<span class="t-dim">[c'+nc+']</span> trial · train <span class="t-good">+'+(tg*100).toFixed(0)+'%</span> vs median · passes margin 5%');
+    if(nc%4===3){
+      step(900,6,'<span class="t-dim">[c'+nc+']</span> validate · holdout <span class="t-bad">−'+(Math.random()*4+1).toFixed(1)+'%</span> vs '+weak.id+' · <span class="t-bad">rejected: curve fit</span>');
+      step(800,7,'<span class="t-dim">[c'+nc+']</span> <span class="t-dim">no_change · population unchanged · velocity 0.00</span>');
+      at(t+10,function(){cycle=nc;hist.push({c:cycle,p:popCI,b:bestCI,v:0});drawChart();syncStats();renderPop()});
+    }else{
+      var gain=0.02+Math.random()*0.05; fresh.ci=Math.max.apply(null,pop.map(function(s){return s.ci}))+gain*0.6;
+      step(900,6,'<span class="t-dim">[c'+nc+']</span> validate · holdout <span class="t-good">+'+(gain*100).toFixed(1)+'%</span> vs '+weak.id+' · survives');
+      step(800,7,'<span class="t-dim">[c'+nc+']</span> <span class="t-good">promote '+fresh.id+'</span> · retire <span class="t-bad">'+weak.id+'</span> · 8 live');
+      at(t+10,function(){renderPop(weak.id,null)});
+      at(t+900,function(){pop[pop.indexOf(weak)]=fresh; born++; pop.forEach(function(s){if(s!==fresh)s.ci+=(Math.random()-0.3)*0.01});
+        var prev=popCI; popCI=pop.reduce(function(a,s){return a+s.ci},0)/8; bestCI=Math.max.apply(null,pop.map(function(s){return s.ci}));
+        cycle=nc; hist.push({c:cycle,p:popCI,b:bestCI,v:popCI-prev}); drawChart(); syncStats(); renderPop(null,fresh.id);
+        tline('<span class="t-dim">[c'+cycle+']</span> takeoff · populationCI <span class="t-co">'+fmt(popCI)+'</span> · bestCI '+fmt(bestCI)+' · velocity '+fmt(popCI-prev));});
+    }
+    at(t+2400,function(){tline('');setTimeout(function(){if(running)runCycle();else{queue=[];qIndex=0;pendingCycle=true}},0)});
+    qIndex=0; qStart=Date.now(); tick();
+  }
+  function tick(){clearTimeout(qTimer);if(!running)return; var q=queue,now=Date.now()-qStart; while(q===queue&&qIndex<q.length&&q[qIndex].t<=now){var f=q[qIndex].fn;qIndex++;f()} if(q===queue&&qIndex<q.length)qTimer=setTimeout(tick,50)}
+  function pause(){running=false;clearTimeout(qTimer);qPaused=Date.now()}
+  function resume(){running=true;qStart+=Date.now()-qPaused;if(pendingCycle){pendingCycle=false;runCycle()}else tick()}
+
+  var kill=document.getElementById('kill'),lbl=document.getElementById('state-lbl'),sub=document.getElementById('state-sub');
+  kill.addEventListener('click',function(){var on=!kill.classList.contains('on'); kill.classList.toggle('on',on); kill.setAttribute('aria-pressed',on); kill.querySelector('.knob').textContent=on?'I':'O';
+    lbl.textContent=on?'RUNNING':'PENDING'; lbl.className='state '+(on?'on':'off');
+    sub.textContent=on?'loop.start() · cycles promote automatically':'requireApproval: true · cycle halted, nothing promoted';
+    document.querySelectorAll('.ring,.ring2').forEach(function(el){el.style.animationPlayState=on?'running':'paused'});
+    if(on){tline('<span class="t-good">✓ approve('+(cycle+1)+') · resuming</span>');resume()} else{tline('<span class="t-bad">■ requireApproval → cycle '+(cycle+1)+' pending · waiting for approve() / reject()</span>');pause()}});
+
+  document.querySelectorAll('.copy').forEach(function(b){b.addEventListener('click',function(){var el=document.getElementById(b.dataset.copy),txt=el.textContent;
+    function done(){b.textContent='copied';setTimeout(function(){b.textContent='copy'},1400)}
+    function sel(){var r=document.createRange();r.selectNodeContents(el);var s=getSelection();s.removeAllRanges();s.addRange(r);b.textContent='selected';setTimeout(function(){b.textContent='copy'},1600)}
+    if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(txt).then(done).catch(sel); else sel();})});
+
+
+  /* ---------- view switch (home / docs) ---------- */
+  var home=document.getElementById('home'),docsEl=document.getElementById('docs');
+  function showView(){
+    var d=location.hash==='#docs'||location.hash.indexOf('#d-')===0;
+    home.hidden=d; docsEl.hidden=!d;
+    document.querySelectorAll('.navlinks a').forEach(function(a){a.classList.toggle('on',!!a.dataset.view&&(a.dataset.view==='docs')===d)});
+    if(d&&location.hash!=='#docs'){var t=document.getElementById(location.hash.slice(3)); if(t)t.scrollIntoView();}
+    else if(d) scrollTo(0,0);
+  }
+  addEventListener('hashchange',showView); showView();
+  var dl=[].slice.call(document.querySelectorAll('#side a')),ds=dl.map(function(a){return document.getElementById(a.getAttribute('href').slice(3))});
+  function spy(){if(docsEl.hidden)return; var i=0; ds.forEach(function(s,k){if(s&&s.getBoundingClientRect().top<160)i=k}); dl.forEach(function(a,k){a.classList.toggle('on',k===i)})}
+  addEventListener('scroll',spy,{passive:true});
+  syncStats();
+  if(rm){tline('<span class="t-dim">[ouro]</span> animation paused (reduced motion). The real run prints one line per step.'); for(var i=1;i<=6;i++){popCI+=0.03;bestCI=popCI*1.4;hist.push({c:i,p:popCI,b:bestCI,v:0.03})} cycle=6; drawChart(); syncStats();}
+  else runCycle();
+})();
+</script>
+
+</body>
+</html>

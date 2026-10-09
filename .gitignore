@@ -1,0 +1,16 @@
+node_modules/
+**/dist/*
+# the committed `ouro` launcher; tsup regenerates it byte for byte (see packages/sdk/tsup.config.ts)
+!packages/sdk/dist/bin.js
+*.tsbuildinfo
+.eslintcache
+coverage/
+# runtime state (the committed sample lives in examples/perp/.ouro/takeoff.json)
+.ouro/*
+!.ouro/takeoff.json
+examples/*/.ouro/*
+!examples/*/.ouro/takeoff.json
+!examples/*/.ouro/README.md
+ouro.json
+.env
+.DS_Store

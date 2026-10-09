@@ -1,0 +1,6 @@
+{
+  "code": "export const params = { rsiLow: 25, stopAtr: 1.5, size: 0.05 };\nexport const bounds = { rsiLow: { min: 10, max: 50, step: 5 }, stopAtr: { min: 0.5, max: 4, step: 0.5 }, size: { min: 0.01, max: 0.1, step: 0.01 } };\nexport function decide(x: Input, p: typeof params): Decision {\n  const rsi = x.features['ta.rsi14'];\n  const atr = x.features['ta.atr14'];\n  const hour = x.features['time.hour'];\n  if (typeof rsi !== 'number' || typeof atr !== 'number' || typeof hour !== 'number') return null;\n  if (hour >= 0 && hour < 4) return null;\n  if (rsi < p.rsiLow) return { side: 'long', size: p.size, stop: p.stopAtr * atr, tp: 2 * p.stopAtr * atr };\n  if (rsi > 100 - p.rsiLow) return { side: 'flat', size: 0 };\n  return null;\n}\nexport const describe = 'Buy oversold RSI dips outside the 00-04 UTC dead hours with an ATR stop.';",
+  "params": { "rsiLow": 25, "stopAtr": 1.5, "size": 0.05 },
+  "bounds": { "rsiLow": { "min": 10, "max": 50, "step": 5 }, "stopAtr": { "min": 0.5, "max": 4, "step": 0.5 }, "size": { "min": 0.01, "max": 0.1, "step": 0.01 } },
+  "rationale": "The diagnosis showed losses clustered in the 00-04 UTC window; skipping it and tightening rsiLow should remove the worst trades."
+}

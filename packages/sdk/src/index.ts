@@ -1,0 +1,32 @@
+import { loadEnv } from './env.js';
+
+loadEnv();
+
+export * from './types.js';
+export * from './plugins.js';
+export * from './constants.js';
+export { createLoop, parseEvery, ensembleDecision } from './loop.js';
+export type { Loop, LoopConfig, DecideResult, LoopEvents } from './loop.js';
+export { primitives, ta, volume, time, orderbook, onchain, computeFeatures, primitiveDocs, featureKeys, INDICATOR_LOOKBACK } from './primitives/index.js';
+export { Sandbox, SandboxError, compile, run, sharedSandbox, validateSource, transpile, scanFeatureKeys, stripComments } from './sandbox.js';
+export type { SandboxOptions, CompiledModule } from './sandbox.js';
+export { openLog, memoryLog } from './log.js';
+export type { EpisodeLog, LogOptions } from './log.js';
+export { split, replay, zeroOutcome, median, mean } from './trial.js';
+export type { Replayable } from './trial.js';
+export { check, clampParams, resolveGuards, allowedFeatureKeys, DEFAULT_GUARDS } from './guards.js';
+export type { GuardContext, GuardVerdict } from './guards.js';
+export { Population } from './population.js';
+export type { HistoryFile, PendingCycle, PendingPromotion } from './population.js';
+export { capabilityIndex, populationCI, bestCI, takeoff, ceilingDetected, writeTakeoff, readTakeoff, formatTakeoff } from './si.js';
+export { seed, mutate, crossbreed, fresh, generator, systemPrompt, constraintsSection, MODULE_CONTRACT, CONTRACT_TYPES } from './generator.js';
+export type { GeneratorDeps, Constraints, PrimitiveDoc } from './generator.js';
+export { diagnose, critic, buildCriticPrompt, episodeRow, CRITIC_SYSTEM, EMPTY_DIAGNOSIS } from './critic.js';
+export type { CriticDeps } from './critic.js';
+export { anthropic, openai, gemini, ollama, resolveLLM, llmAdapters, completeJson, extractJson, LLMOutputError } from './llm/index.js';
+export type { LLMName } from './llm/index.js';
+export { paperExecutor, outcomeAsset } from './executors/paper.js';
+export type { PaperConfig, PaperExecutor, PaperPosition, PaperCloseReason, PaperOutcomeRaw } from './executors/paper.js';
+export { loadConfig, populationTable, buildProgram } from './cli.js';
+export { loadEnv, parseEnv, findRepoRoot } from './env.js';
+export type { LoadEnvOptions } from './env.js';

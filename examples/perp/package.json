@@ -1,0 +1,18 @@
+{
+  "name": "perp-example",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "OURO reference example: BTC and ETH 15m perps on paper against live Hyperliquid candles. No strategy supplied.",
+  "scripts": {
+    "run": "ouro run --paper",
+    "cycle": "ouro cycle",
+    "population": "ouro population",
+    "takeoff": "ouro takeoff"
+  },
+  "dependencies": {
+    "@ourointelligence/executor-paper": "workspace:*",
+    "@ourointelligence/sdk": "workspace:*",
+    "@ourointelligence/source-hyperliquid": "workspace:*"
+  }
+}

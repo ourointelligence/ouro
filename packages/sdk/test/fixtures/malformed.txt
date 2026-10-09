@@ -1,0 +1,10 @@
+Sure! Here is the strategy you asked for:
+
+```json
+{
+  "code": "export const params = { rsiLow: 30 };\nexport const bounds = { rsiLow: { min: 10, max: 50, step: 5 } };\nexport function decide(x, p) { return null; }\nexport const describe = 'broken';",
+  "params": { "rsiLow": 30 },
+  "rationale": "This one is missing a closing brace and has a trailing comma",
+```
+
+Let me know if you want changes.
