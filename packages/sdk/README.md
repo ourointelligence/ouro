@@ -23,4 +23,4 @@ const loop = createLoop({
 await loop.start();
 ```
 
-Full documentation, the CLI reference, the SI terms and the going-live guide are in the repository README and `docs/`. Plugin interfaces are documented in `docs/plugins.md`.
+Full documentation, the CLI reference, the SI terms and the going-live guide: https://github.com/ourointelligence/ouro (README and `docs/`). Plugin interfaces: `docs/plugins.md`. Website: https://ourosi.xyz
